@@ -145,10 +145,9 @@ should mean *route elsewhere now* and never revisit the check.
 
 ## Worked example: a compound eligibility Guard
 
-`example_trial_emulation.R` gates its trial population on a single `Age` check and notes
-in a comment that a stricter version would exclude specific active conditions with a `Not` +
-`ActiveCondition` combinator. Here's that stricter gate actually built, combining everything
-above into one `Guard`:
+A trial population is often gated on a single `Age` check, but a stricter version would also
+exclude specific active conditions with a `Not` + `ActiveCondition` combinator. Here's that
+stricter gate actually built, combining everything above into one `Guard`:
 
 ```{r worked-example}
 pregnancy_code <- create_component_settings("code",

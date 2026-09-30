@@ -34,7 +34,7 @@ library(syntheaModuleR)
 | `Race`                | `race`                      |                                            |            |
 | `Symptom`             | `symptom`, `operator`, `value` |                                        |            |
 | `Observation`         | `operator`                 | `codes`, `referenced_by_attribute`, `value`, `value_code` | exactly one of `codes`/`referenced_by_attribute` |
-| `Attribute`           | `attribute`, `operator`, `value` |                                      |            |
+| `Attribute`           | `attribute`, `operator`    | `value`                                   | `value` required unless `operator` is `"is nil"`/`"is not nil"` |
 | `VitalSign`           | `vital_sign`, `operator`, `value` |                                      |            |
 | `PriorState`          | `name`                      | `since`, `within`                        |            |
 | `ActiveCondition`     |                             | `codes`, `referenced_by_attribute`        | exactly one of the two |

@@ -34,8 +34,9 @@ library(syntheaModuleR)
    probability/timing, optional demographic eligibility).
 3. **Produce a YAML that is editable** -- `write_module_spec()` persists the result; every code,
    share, and probability is right there in plain text, ready to hand-edit.
-4. **Go from YAML to build a module** -- `build_module_from_spec()` reads it back and mechanically
-   assembles the Synthea module. This step never touches a codelist again.
+4. **Go from YAML to build the modules** -- `build_module_from_spec()` reads it back and
+   mechanically assembles the Synthea modules: one exposure module, plus one module per outcome.
+   This step never touches a codelist again.
 
 ## Stage 1: read the codelist
 
@@ -127,16 +128,45 @@ cat(readLines(path), sep = "\n")
 This file is the thing you'd commit and hand-edit -- fix a code, add or remove an outcome item,
 adjust a share, all without touching R again.
 
-## Stage 4: build the module
+## Stage 4: build the modules
 
 ```{r build}
-module_json <- build_module_from_spec(path)
-parsed <- jsonlite::fromJSON(module_json, simplifyVector = FALSE)
-length(parsed$states)
-parsed$states$Initial$direct_transition
+modules <- build_module_from_spec(path)
+names(modules)
 ```
 
-`inclusion_criteria` was given, so `Initial` routes into a `create_population()` Guard first; omit
-it entirely (`inclusion_criteria = NULL`, the default) and `Initial` would route straight into the
-exposure block instead -- `chain()` drops a `NULL` fragment on its own, no special-casing needed.
+The result is a named list: the exposure module first, then one module per outcome item.
+
+```{r build-exposure}
+exposure <- jsonlite::fromJSON(modules[["flu_vaccine_example"]], simplifyVector = FALSE)
+exposure$states$Initial$direct_transition
+```
+
+`inclusion_criteria` was given, so the exposure module's `Initial` routes into a
+`create_population()` Guard first; omit it entirely (`inclusion_criteria = NULL`, the default) and
+`Initial` would route straight into the exposure block instead -- `chain()` drops a `NULL` fragment
+on its own, no special-casing needed. The exposure block tags the chosen arm on the person as the
+spec's `exposure$attribute` (`"exposure_group"` by default).
+
+Each outcome module starts with a Guard that waits for that attribute to be set, then runs its own
+delay and onset choice:
+
+```{r build-outcome}
+outcome <- jsonlite::fromJSON(modules[[2]], simplifyVector = FALSE)
+names(outcome$states)
+```
+
+Why separate modules rather than chaining every outcome after the exposure in one module? A person
+is only ever in one state of a given module at a time, so chained outcomes would run one after
+another: the second outcome's delay would only start once the first one's had finished, making the
+windows cumulative and dependent on codelist row order. Synthea runs every module for a person side
+by side, so separate modules give each outcome its own window measured from exposure.
+
+All the modules belong together -- write them out and install them in the same Synthea checkout:
+
+```{r write, eval = FALSE}
+for (nm in names(modules)) {
+  write_module_json(modules[[nm]], file.path("modules", paste0(nm, ".json")))
+}
+```
 

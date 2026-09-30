@@ -26,8 +26,8 @@ trimmed). \code{NULL} (default): no filter, and the \code{type} column isn't req
 \item{event_abbreviation}{Keep rows whose aliased \code{event_abbreviation} column equals this value
 (case-insensitive, trimmed) -- the exposure-style filter (e.g. \code{"RSV"}, matching several
 distinct product rows you then pick apart yourself by \code{display}). \code{NULL} (default): no
-filter. Independent of \code{group_by}: set this alone to get every matching row back unco
-llapsed, or combine with \code{group_by} to additionally collapse within the filtered set.}
+filter. Independent of \code{group_by}: set this alone to get every matching row back uncollapsed,
+or combine with \code{group_by} to additionally collapse within the filtered set.}
 
 \item{group_by}{A canonical column name (resolved via \code{columns}, typically
 \code{"event_abbreviation"}) to collapse to one best-tagged row per distinct value -- the

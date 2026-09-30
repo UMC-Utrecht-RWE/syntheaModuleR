@@ -102,6 +102,16 @@ test_that("Attribute requires attribute/operator/value", {
   )
 })
 
+test_that("Attribute value is optional only for the is nil / is not nil operators", {
+  x <- create_logic_settings("Attribute", attribute = "x", operator = "is not nil")
+  expect_null(x$value)
+  expect_silent(create_logic_settings("Attribute", attribute = "x", operator = "is nil"))
+  expect_error(
+    create_logic_settings("Attribute", attribute = "x", operator = "=="),
+    "missing required field 'value'"
+  )
+})
+
 test_that("And/Or wrap nested conditions as an array", {
   cond <- create_logic_settings(
     "And",

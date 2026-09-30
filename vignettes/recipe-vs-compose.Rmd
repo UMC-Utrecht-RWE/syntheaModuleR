@@ -27,8 +27,7 @@ library(syntheaModuleR)
 
 ## The recipe
 
-`example_generate.R` builds a minimal seasonal-rhinitis module with `build_disease_module()`
-in one call:
+Here's a minimal seasonal-rhinitis module built with `build_disease_module()` in one call:
 
 ```{r recipe}
 condition_code <- create_component_settings("code",
@@ -198,6 +197,6 @@ encounter, optionally gated by age, optionally resolves or kills" -- it's less t
 produces the identical thing you'd have written anyway. Drop to `build_module()` the moment the
 shape stops fitting: multiple conditions, non-linear branching, any state type outside
 `ConditionOnset`/`Encounter`/`EncounterEnd`/`ConditionEnd`/`Delay`/`Guard`/`Death`, or anything
-involving `Logic` beyond a single `Age` gate. `example_compose.R` and
-`example_trial_emulation.R` are both entirely in `build_module()` territory -- neither
-fits the recipe's shape at all.
+involving `Logic` beyond a single `Age` gate. The module built in
+`vignette("cohort-building")` is entirely in `build_module()` territory -- it doesn't fit the
+recipe's shape at all.

@@ -88,6 +88,36 @@ test_that("build_module_spec errors on an out-of-range outcome probability", {
   )
 })
 
+test_that("build_module_spec rejects a negative arm share even when the total is 1", {
+  expect_error(
+    build_module_spec(
+      "x",
+      exposure_codes = exposure_codes_fixture(),
+      exposure_shares = c(drugA = -0.1, drugB = 0.6, comparator = 0.5),
+      outcome_codes = outcome_codes_fixture(),
+      outcome_probability = 0.1,
+      outcome_delay = list(low = 0, high = 100, unit = "days")
+    ),
+    "finite number in \\[0, 1\\]"
+  )
+})
+
+test_that("build_module_spec errors clearly on an NA outcome probability", {
+  codes <- outcome_codes_fixture()
+  codes$p <- c(0.05, NA)
+  expect_error(
+    build_module_spec(
+      "x",
+      exposure_codes = exposure_codes_fixture(),
+      exposure_shares = c(drugA = 0.3, drugB = 0.3, comparator = 0.4),
+      outcome_codes = codes,
+      outcome_probability = "p",
+      outcome_delay = list(low = 0, high = 100, unit = "days")
+    ),
+    "\\(0, 1\\)"
+  )
+})
+
 test_that("build_module_spec accepts a column name for per-row outcome probability", {
   codes <- outcome_codes_fixture()
   codes$p <- c(0.05, 0.2)
@@ -150,8 +180,12 @@ test_that("read_module_spec errors clearly on a YAML file missing required keys"
 
 # build_module_from_spec() ----
 
+exposure_module <- function(spec) {
+  module_states(build_module_from_spec(spec)[[spec$name]])
+}
+
 test_that("build_module_from_spec omits the Guard entirely when inclusion_criteria is absent", {
-  m <- module_states(build_module_from_spec(a_spec()))
+  m <- exposure_module(a_spec())
   expect_equal(m$Initial$direct_transition, "Exposure Choice")
 })
 
@@ -161,55 +195,100 @@ test_that("build_module_from_spec prepends a Guard when inclusion_criteria is pr
       age = list(operator = ">=", quantity = 60, unit = "years")
     )
   )
-  m <- module_states(build_module_from_spec(spec))
+  m <- exposure_module(spec)
   expect_equal(m$Initial$direct_transition, "Inclusion Criteria")
   expect_equal(m[["Inclusion Criteria"]]$type, "Guard")
 })
 
 test_that("build_module_from_spec builds a Vaccine state for exposure_state = 'vaccine'", {
-  m <- module_states(build_module_from_spec(a_spec(exposure_state = "vaccine")))
+  m <- exposure_module(a_spec(exposure_state = "vaccine"))
   expect_equal(m[["Exposure - drugA"]]$type, "Vaccine")
 })
 
 test_that("build_module_from_spec builds a bare MedicationOrder for exposure_state = 'medication'", {
-  m <- module_states(build_module_from_spec(a_spec(
+  m <- exposure_module(a_spec(
     exposure_state = "medication"
-  )))
+  ))
   expect_equal(m[["Exposure - drugA"]]$type, "MedicationOrder")
   expect_null(m[["Exposure - drugA"]]$reason)
 })
 
 test_that("build_module_from_spec builds a ConditionOnset for exposure_state = 'condition'", {
-  m <- module_states(build_module_from_spec(a_spec(
+  m <- exposure_module(a_spec(
     exposure_state = "condition"
-  )))
+  ))
   expect_equal(m[["Exposure - drugA"]]$type, "ConditionOnset")
 })
 
-test_that("build_module_from_spec produces one Delay+Onset block per outcome item", {
-  m <- module_states(build_module_from_spec(a_spec()))
-  expect_true("OUT1 Delay" %in% names(m))
-  expect_true("OUT2 Delay" %in% names(m))
-  expect_equal(m[["Outcome - OUT1"]]$type, "ConditionOnset")
+test_that("build_module_from_spec returns the exposure module plus one module per outcome item", {
+  modules <- build_module_from_spec(a_spec())
+  expect_equal(
+    names(modules),
+    c("spec_test", "spec_test - OUT1", "spec_test - OUT2")
+  )
+  exposure <- module_states(modules[["spec_test"]])
+  expect_false(any(grepl("OUT", names(exposure))))
+
+  out1 <- module_states(modules[["spec_test - OUT1"]])
+  expect_equal(out1$Initial$direct_transition, "Wait For Exposure")
+  guard <- out1[["Wait For Exposure"]]
+  expect_equal(guard$type, "Guard")
+  expect_equal(guard$allow$attribute, "exposure_group")
+  expect_equal(guard$allow$operator, "is not nil")
+  expect_null(guard$allow$value)
+  expect_equal(guard$direct_transition, "OUT1 Delay")
+  expect_equal(out1[["Outcome - OUT1"]]$type, "ConditionOnset")
 })
 
-test_that("build_module_from_spec produces a valid module that round-trips through jsonlite", {
-  json <- build_module_from_spec(a_spec())
-  parsed <- jsonlite::fromJSON(json, simplifyVector = FALSE)
-  expect_equal(parsed$name, "spec_test")
-  expect_true("Terminal" %in% names(parsed$states))
+test_that("build_module_from_spec gives each outcome its own window, not a cumulative chain", {
+  out2 <- module_states(build_module_from_spec(a_spec())[["spec_test - OUT2"]])
+  expect_false(any(grepl("OUT1", names(out2))))
+  expect_equal(out2[["Wait For Exposure"]]$direct_transition, "OUT2 Delay")
+})
+
+test_that("build_module_from_spec produces valid modules that round-trip through jsonlite", {
+  for (json in build_module_from_spec(a_spec())) {
+    parsed <- jsonlite::fromJSON(json, simplifyVector = FALSE)
+    expect_true("Terminal" %in% names(parsed$states))
+  }
+})
+
+test_that("build_module_from_spec(as_json = FALSE) returns R lists", {
+  modules <- build_module_from_spec(a_spec(), as_json = FALSE)
+  expect_true(all(vapply(modules, is.list, logical(1))))
+})
+
+test_that("build_module_from_spec rejects invalid hand-edited probabilities and shares", {
+  spec <- a_spec()
+  spec$outcomes$items[[1]]$probability <- 1.5
+  expect_error(build_module_from_spec(spec), "OUT1' probability")
+
+  spec <- a_spec()
+  spec$outcomes$items[[1]]$probability <- "high"
+  expect_error(build_module_from_spec(spec), "OUT1' probability")
+
+  spec <- a_spec()
+  spec$exposure$options[[1]]$share <- -0.1
+  spec$exposure$options[[2]]$share <- 0.7
+  expect_error(build_module_from_spec(spec), "finite number in \\[0, 1\\]")
+})
+
+test_that("build_module_from_spec requires exposure$attribute", {
+  spec <- a_spec()
+  spec$exposure$attribute <- NULL
+  expect_error(build_module_from_spec(spec), "exposure\\$attribute must be set")
 })
 
 test_that("build_module_from_spec accepts a spec list directly (not just a file path)", {
   spec <- a_spec()
-  m <- module_states(build_module_from_spec(spec))
+  m <- exposure_module(spec)
   expect_true("Exposure Choice" %in% names(m))
 })
 
 test_that("build_module_from_spec accepts a YAML path directly", {
   path <- tempfile(fileext = ".yaml")
   write_module_spec(a_spec(), path)
-  m <- module_states(build_module_from_spec(path))
+  m <- module_states(build_module_from_spec(path)[["spec_test"]])
   expect_true("Exposure Choice" %in% names(m))
 })
 
@@ -217,7 +296,7 @@ test_that("build_module_from_spec honors a per-item probability/delay override o
   spec <- a_spec()
   spec$outcomes$items[[1]]$probability <- 0.9
   spec$outcomes$items[[1]]$delay <- list(low = 5, high = 5, unit = "days")
-  m <- module_states(build_module_from_spec(spec))
+  m <- module_states(build_module_from_spec(spec)[["spec_test - OUT1"]])
   expect_equal(m[["OUT1 Delay"]]$range$low, 5)
   choice <- m[["OUT1 Onset Choice"]]$distributed_transition
   onset_share <- Filter(function(o) o$transition == "Outcome - OUT1", choice)[[

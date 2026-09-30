@@ -12,7 +12,7 @@ pathways(name, options, shares, attribute = NULL, terminal_options = NULL)
 \item{options}{A named list of fragments; an option can be \code{NULL} for "nothing happens on this
 pathway."}
 
-\item{shares}{A named numeric vector matching \code{options}' names.}
+\item{shares}{A named numeric vector matching \code{options}' names -- each in \link{0, 1}, summing to 1.}
 
 \item{attribute}{Optional -- auto-tags the chosen option's name (as this \code{attribute}) before
 the join.}

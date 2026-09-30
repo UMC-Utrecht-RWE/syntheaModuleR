@@ -97,7 +97,7 @@ in. The vignettes below build that up states-first, the same way you'd actually 
     instead of individual `create_state_settings()` calls, growing from a single
     `create_condition()` up to a full protocol-shaped module (population eligibility, an
     active-comparator exposure, gap-tolerant persistence via `repeat_until()`, and a final
-    `classify()`) lifted from the real study protocols in `experimentation/`.
+    `classify()`) modeled on real observational study protocols.
 
 ## Quick reference
 
@@ -118,13 +118,10 @@ R/
   logic.R        .logic_schema + create_logic_settings()
   transitions.R  .transition_schema + create_transition_settings()
   states.R       .state_schema + create_state_settings()
-  module.R       build_module(), validate_module(), write_module_json(), build_disease_module()
-
-build_disease_module.R      loader -- sources R/*.R in dependency order
-example_generate.R          uses build_disease_module() (the recipe)
-example_compose.R           uses build_module() + create_state_settings() directly
-example_trial_emulation.R   a 47-state worked example (target-trial-emulation design)
+  module.R       build_module(), validate_module(), write_module_json(),
+                 build_disease_module() (recipe), build_cohort_module() (Frontend finisher)
+  blocks.R       Frontend-layer leaf constructors (create_condition(), create_medication(), ...)
+  combinators.R  Frontend-layer combinators (chain()/add(), pathways(), classify(), repeat_until())
 ```
 
-Every example script -- and every vignette in this package -- sources
-`build_disease_module.R`, never the individual `R/*.R` layer files directly.
+Every vignette in this package loads it with `library(syntheaModuleR)`.

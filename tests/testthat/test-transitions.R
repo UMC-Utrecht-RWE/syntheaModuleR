@@ -177,3 +177,62 @@ test_that("array-rule violation surfaces for transition options", {
     "looks like a single item"
   )
 })
+
+test_that("option-list transitions reject an empty options list", {
+  for (kind in c("distributed", "conditional", "complex")) {
+    expect_error(
+      create_transition_settings(kind, options = list()),
+      "'options' must not be empty"
+    )
+  }
+  expect_error(
+    create_transition_settings(
+      "lookup_table",
+      lookup_table_name = "risk.csv",
+      options = list()
+    ),
+    "'options' must not be empty"
+  )
+})
+
+test_that("conditional/complex only allow a conditionless option in last position", {
+  cond <- create_logic_settings("True")
+  expect_error(
+    create_transition_settings(
+      "conditional",
+      options = list(list(transition = "A"), list(condition = cond, transition = "B"))
+    ),
+    "only the last option may omit 'condition'"
+  )
+  expect_error(
+    create_transition_settings(
+      "complex",
+      options = list(list(transition = "A"), list(condition = cond, transition = "B"))
+    ),
+    "only the last option may omit 'condition'"
+  )
+})
+
+test_that("complex nested distributions are checked like distributed options", {
+  expect_error(
+    create_transition_settings(
+      "complex",
+      options = list(list(distributions = list(list(transition = "A"))))
+    ),
+    "each option needs 'distribution'"
+  )
+  expect_error(
+    create_transition_settings(
+      "complex",
+      options = list(list(distributions = list()))
+    ),
+    "options must not be empty"
+  )
+  expect_error(
+    create_transition_settings(
+      "complex",
+      options = list(list(distributions = list(transition = "A", distribution = 1)))
+    ),
+    "looks like a single item"
+  )
+})

@@ -30,9 +30,9 @@ Concretely, we'll build a module where simulated patients:
 4. and are finally classified as "treated" or "untreated" by reading their actual medication
    record, not by which pathway through the graph they took to get there.
 
-The example medical codes below (RxNorm/SNOMED-CT) are plausible placeholders chosen for realism,
-the same way `example_trial_emulation.R` notes for its own codes -- verify against current code
-sets before using this for anything beyond synthetic-data generation.
+The example medical codes below (RxNorm/SNOMED-CT) are plausible placeholders chosen for realism
+-- verify against current code sets before using this for anything beyond synthetic-data
+generation.
 
 ```{r setup}
 library(syntheaModuleR)
@@ -53,7 +53,7 @@ third_agent_code <- create_component_settings("code",
 )
 ```
 
-`direct()` is the same one-line helper `example_trial_emulation.R` uses to cut down on repeating
+`direct()` is a one-line helper to cut down on repeating
 `create_transition_settings("direct", to = ...)` -- nothing more than that.
 
 ## Step 1: the base cohort -- diagnosis only
@@ -346,8 +346,8 @@ cohort with heterogeneous treatment pathways: a `Guard` (`vignette("logic-and-gu
 hold patients on a drug until an `Observation` crosses some threshold before letting them switch;
 a `conditional_transition` keyed on `PriorState` could route only patients who've actually been
 through `"Switch To Third Agent"` into a separate follow-up pathway; a `distributed_transition`
-whose probability comes from a `NamedDistribution` (`list(attribute = ..., default = ...)`, used
-throughout `example_trial_emulation.R`) could make the switch or discontinuation probability
+whose probability comes from a `NamedDistribution` (`list(attribute = ..., default = ...)`; see
+`vignette("transition-reference")`) could make the switch or discontinuation probability
 itself depend on an attribute set earlier in the same module, instead of a fixed number; and
 `validate_module()`, called explicitly as above, is worth running again after any such addition
 before regenerating the JSON.

@@ -81,8 +81,8 @@ bridge_columns <- function(
 #' @param event_abbreviation Keep rows whose aliased `event_abbreviation` column equals this value
 #'   (case-insensitive, trimmed) -- the exposure-style filter (e.g. `"RSV"`, matching several
 #'   distinct product rows you then pick apart yourself by `display`). `NULL` (default): no
-#'   filter. Independent of `group_by`: set this alone to get every matching row back unco
-#'   llapsed, or combine with `group_by` to additionally collapse within the filtered set.
+#'   filter. Independent of `group_by`: set this alone to get every matching row back uncollapsed,
+#'   or combine with `group_by` to additionally collapse within the filtered set.
 #' @param group_by A canonical column name (resolved via `columns`, typically
 #'   `"event_abbreviation"`) to collapse to one best-tagged row per distinct value -- the
 #'   AESI-style shape. `NULL` (default): no collapsing, every filtered row is returned as-is, and
@@ -166,6 +166,8 @@ read_bridge_codelist <- function(
       toupper(trimws(df[[event_abbrev_col]])) ==
         toupper(trimws(event_abbreviation))
   }
+  # A blank filter field compares as NA -- treat it as "doesn't match", not "keep".
+  keep[is.na(keep)] <- FALSE
   out <- df[keep, , drop = FALSE]
   if (nrow(out) == 0) {
     stop(
@@ -290,11 +292,15 @@ read_bridge_codelist <- function(
 #' @param tag_preference Tag substrings in preference order; matching is case-insensitive and
 #'   by substring, so e.g. `"narrow"` matches `"Narrow, RSV"`.
 #' @return The index of the first `tag_preference` entry found in `tag_value`, or `NA_integer_`
-#'   if none match or the cell is blank (the row is then ineligible).
+#'   if none match, the cell is blank/`NA`, or it carries an `exclude`/`ignore` marker anywhere
+#'   (even in a compound tag like `"multiple:exclude+narrow"`) -- the row is then ineligible.
 #' @noRd
 .tag_rank <- function(tag_value, tag_preference) {
+  if (is.na(tag_value)) {
+    return(NA_integer_)
+  }
   tl <- tolower(trimws(tag_value))
-  if (!nzchar(tl)) {
+  if (!nzchar(tl) || grepl("exclude|ignore", tl)) {
     return(NA_integer_)
   }
   for (i in seq_along(tag_preference)) {
