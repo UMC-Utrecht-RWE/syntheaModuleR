@@ -5,8 +5,10 @@ a_code <- function(code = "38341003", display = "Hypertension", system = "SNOMED
 }
 
 another_code <- function() {
-  create_component_settings("code", system = "RxNorm", code = "860975",
-                              display = "Metformin hydrochloride 500 MG Oral Tablet")
+  create_component_settings("code",
+    system = "RxNorm", code = "860975",
+    display = "Metformin hydrochloride 500 MG Oral Tablet"
+  )
 }
 
 a_range <- function(low = 1, high = 5, unit = "days") {
@@ -17,7 +19,8 @@ a_range <- function(low = 1, high = 5, unit = "days") {
 minimal_states <- function() {
   list(
     Initial = create_state_settings("Initial",
-      transition = create_transition_settings("direct", to = "Terminal")),
+      transition = create_transition_settings("direct", to = "Terminal")
+    ),
     Terminal = create_state_settings("Terminal")
   )
 }

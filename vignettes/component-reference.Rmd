@@ -43,7 +43,8 @@ Already introduced in `vignette("layers")` -- shown here just for completeness:
 
 ```{r code-range}
 create_component_settings("code",
-  system = "SNOMED-CT", code = "444316003", display = "Seasonal allergic rhinitis (disorder)")
+  system = "SNOMED-CT", code = "444316003", display = "Seasonal allergic rhinitis (disorder)"
+)
 
 create_component_settings("range", low = 3, high = 7, unit = "days")
 ```
@@ -76,7 +77,8 @@ each sampled column corresponds to:
 ```{r sampled_data}
 create_component_settings("sampled_data",
   origin_value = 0, attributes = list("ecg_lead_ii"),
-  factor = 0.01, lower_limit = -200, upper_limit = 200, decimal_format = "0.00")
+  factor = 0.01, lower_limit = -200, upper_limit = 200, decimal_format = "0.00"
+)
 ```
 
 ## `attachment`
@@ -88,12 +90,14 @@ this package's `one_of` check:
 
 ```{r attachment}
 create_component_settings("attachment",
-  url = "https://example.org/growth-chart.png", content_type = "image/png", title = "Growth Chart")
+  url = "https://example.org/growth-chart.png", content_type = "image/png", title = "Growth Chart"
+)
 ```
 
 ```{r attachment-error, error = TRUE}
 create_component_settings("attachment",
-  chart = "base64-encoded-chart-data", url = "https://example.org/growth-chart.png")
+  chart = "base64-encoded-chart-data", url = "https://example.org/growth-chart.png"
+)
 ```
 
 ## `io_mapper`

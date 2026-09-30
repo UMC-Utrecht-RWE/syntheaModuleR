@@ -40,7 +40,9 @@ adult <- create_logic_settings("Age", operator = ">=", quantity = 18, unit = "ye
 female <- create_logic_settings("Gender", gender = "F")
 has_diabetes <- create_logic_settings("ActiveCondition",
   codes = list(create_component_settings("code",
-    system = "SNOMED-CT", code = "44054006", display = "Diabetes mellitus type 2 (disorder)")))
+    system = "SNOMED-CT", code = "44054006", display = "Diabetes mellitus type 2 (disorder)"
+  ))
+)
 ```
 
 Four of these leaves (`Observation`, `ActiveCondition`, `ActiveAllergy`, `ActiveMedication`,
@@ -104,7 +106,8 @@ eligible <- create_logic_settings("And", conditions = list(
   create_logic_settings("Not", condition = create_logic_settings("Or", conditions = list(
     has_diabetes,
     create_logic_settings("ActiveAllergy", codes = list(create_component_settings("code",
-      system = "RxNorm", code = "731370", display = "BNT162b2 vaccine")))
+      system = "RxNorm", code = "731370", display = "BNT162b2 vaccine"
+    )))
   )))
 ))
 str(eligible, max.level = 4)
@@ -124,14 +127,16 @@ either way.
 # Guard: blocks here, checking every timestep, until the person turns 18.
 age_guard <- create_state_settings("Guard",
   allow = adult,
-  transition = create_transition_settings("direct", to = "Enrollment"))
+  transition = create_transition_settings("direct", to = "Enrollment")
+)
 
 # conditional_transition: evaluated once, right now -- routes immediately, doesn't wait.
 age_branch <- create_state_settings("Simple",
   transition = create_transition_settings("conditional", options = list(
     list(condition = adult, transition = "Enrollment"),
-    list(transition = "Ineligible")  # condition omitted = the else branch
-  )))
+    list(transition = "Ineligible") # condition omitted = the else branch
+  ))
+)
 ```
 
 Use `Guard` when "not yet eligible" should mean *wait* (a person who's 16 now will enroll two
@@ -147,26 +152,30 @@ above into one `Guard`:
 
 ```{r worked-example}
 pregnancy_code <- create_component_settings("code",
-  system = "SNOMED-CT", code = "77386006", display = "Pregnancy (finding)")
+  system = "SNOMED-CT", code = "77386006", display = "Pregnancy (finding)"
+)
 vaccine_allergy_code <- create_component_settings("code",
-  system = "RxNorm", code = "731370", display = "BNT162b2 vaccine")
+  system = "RxNorm", code = "731370", display = "BNT162b2 vaccine"
+)
 
 trial_eligibility <- create_logic_settings("And", conditions = list(
   create_logic_settings("Age", operator = ">=", quantity = 16, unit = "years"),
   create_logic_settings("Not", condition = create_logic_settings("ActiveCondition",
-    codes = list(pregnancy_code))),
+    codes = list(pregnancy_code)
+  )),
   create_logic_settings("Not", condition = create_logic_settings("ActiveAllergy",
-    codes = list(vaccine_allergy_code)))
+    codes = list(vaccine_allergy_code)
+  ))
 ))
 
 states <- list(
   Initial = create_state_settings("Initial",
-    transition = create_transition_settings("direct", to = "Eligibility Gate")),
-
+    transition = create_transition_settings("direct", to = "Eligibility Gate")
+  ),
   "Eligibility Gate" = create_state_settings("Guard",
     allow = trial_eligibility,
-    transition = create_transition_settings("direct", to = "Terminal")),
-
+    transition = create_transition_settings("direct", to = "Terminal")
+  ),
   Terminal = create_state_settings("Terminal")
 )
 

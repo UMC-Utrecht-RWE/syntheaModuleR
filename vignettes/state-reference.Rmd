@@ -70,13 +70,17 @@ A few reusable codes for the examples below:
 
 ```{r shared-codes}
 strep_code <- create_component_settings("code",
-  system = "SNOMED-CT", code = "43878008", display = "Streptococcal sore throat (disorder)")
+  system = "SNOMED-CT", code = "43878008", display = "Streptococcal sore throat (disorder)"
+)
 penicillin_code <- create_component_settings("code",
-  system = "RxNorm", code = "7980", display = "Penicillin")
+  system = "RxNorm", code = "7980", display = "Penicillin"
+)
 acetaminophen_code <- create_component_settings("code",
-  system = "RxNorm", code = "313782", display = "Acetaminophen 325 MG Oral Tablet")
+  system = "RxNorm", code = "313782", display = "Acetaminophen 325 MG Oral Tablet"
+)
 diabetes_careplan_code <- create_component_settings("code",
-  system = "SNOMED-CT", code = "698360004", display = "Diabetes self management plan")
+  system = "SNOMED-CT", code = "698360004", display = "Diabetes self management plan"
+)
 ```
 
 ## Control flow
@@ -91,12 +95,15 @@ the referenced submodule actually exists in the target Synthea checkout.
 create_state_settings("Initial", transition = direct("Next"))
 create_state_settings("Terminal")
 create_state_settings("Simple", transition = direct("Next"))
-create_state_settings("CallSubmodule", submodule = "medications/otc_antihistamine",
-  transition = direct("Next"))
+create_state_settings("CallSubmodule",
+  submodule = "medications/otc_antihistamine",
+  transition = direct("Next")
+)
 create_state_settings("Guard", allow = create_logic_settings("True"), transition = direct("Next"))
 create_state_settings("Delay",
   exact = create_component_settings("exact", quantity = 7, unit = "days"),
-  transition = direct("Next"))
+  transition = direct("Next")
+)
 ```
 
 `Physiology` is gated behind the `physiology.state.enabled` config flag (off by default), which
@@ -107,7 +114,8 @@ off. `model` and `solver` are free strings this package doesn't restrict:
 create_state_settings("Physiology",
   model = "BloodPressureModel.xml", solver = "rk4", step_size = 0.1, sim_duration = 1,
   alt_direct_transition = "Next",
-  transition = direct("Next"))
+  transition = direct("Next")
+)
 ```
 
 ## Attributes
@@ -116,10 +124,14 @@ create_state_settings("Physiology",
 for completeness. `Counter` increments or decrements a numeric attribute by `amount` (default 1):
 
 ```{r attributes}
-create_state_settings("SetAttribute", attribute = "risk_score", value = 0,
-  transition = direct("Next"))
-create_state_settings("Counter", attribute = "dose_count", action = "increment",
-  transition = direct("Next"))
+create_state_settings("SetAttribute",
+  attribute = "risk_score", value = 0,
+  transition = direct("Next")
+)
+create_state_settings("Counter",
+  attribute = "dose_count", action = "increment",
+  transition = direct("Next")
+)
 ```
 
 ## Encounters
@@ -128,8 +140,10 @@ create_state_settings("Counter", attribute = "dose_count", action = "increment",
 create_state_settings("Encounter", wellness = TRUE, transition = direct("Next"))
 create_state_settings("EncounterEnd",
   discharge_disposition = create_component_settings("code",
-    system = "SNOMED-CT", code = "306689006", display = "Discharge to home"),
-  transition = direct("Next"))
+    system = "SNOMED-CT", code = "306689006", display = "Discharge to home"
+  ),
+  transition = direct("Next")
+)
 ```
 
 ## Conditions
@@ -139,9 +153,12 @@ create_state_settings("EncounterEnd",
 ```{r conditions}
 create_state_settings("ConditionOnset",
   codes = list(strep_code), target_encounter = "Diagnosis Encounter",
-  transition = direct("Diagnosis Encounter"))
-create_state_settings("ConditionEnd", condition_onset = "Condition Onset",
-  transition = direct("Next"))
+  transition = direct("Diagnosis Encounter")
+)
+create_state_settings("ConditionEnd",
+  condition_onset = "Condition Onset",
+  transition = direct("Next")
+)
 ```
 
 ## Allergies
@@ -150,11 +167,15 @@ create_state_settings("ConditionEnd", condition_onset = "Condition Onset",
 `"food"`/`"medication"`/`"environment"`), not restricted by this package:
 
 ```{r allergies}
-create_state_settings("AllergyOnset", codes = list(penicillin_code),
+create_state_settings("AllergyOnset",
+  codes = list(penicillin_code),
   allergy_type = "allergy", category = "medication",
-  transition = direct("Next"))
-create_state_settings("AllergyEnd", allergy_onset = "Allergy Onset",
-  transition = direct("Next"))
+  transition = direct("Next")
+)
+create_state_settings("AllergyEnd",
+  allergy_onset = "Allergy Onset",
+  transition = direct("Next")
+)
 ```
 
 ## Medications
@@ -163,10 +184,14 @@ create_state_settings("AllergyEnd", allergy_onset = "Allergy Onset",
 a `ConditionOnset` state -- see `vignette("layers")`'s note on this:
 
 ```{r medications}
-create_state_settings("MedicationOrder", codes = list(acetaminophen_code),
-  reason = "Condition Onset", transition = direct("Next"))
-create_state_settings("MedicationEnd", medication_order = "Prescribe Medication",
-  transition = direct("Next"))
+create_state_settings("MedicationOrder",
+  codes = list(acetaminophen_code),
+  reason = "Condition Onset", transition = direct("Next")
+)
+create_state_settings("MedicationEnd",
+  medication_order = "Prescribe Medication",
+  transition = direct("Next")
+)
 ```
 
 ## Care plans
@@ -174,12 +199,16 @@ create_state_settings("MedicationEnd", medication_order = "Prescribe Medication"
 `activities` and `goals` are both lists of `code` components, same as `codes`:
 
 ```{r careplans}
-create_state_settings("CarePlanStart", codes = list(diabetes_careplan_code),
+create_state_settings("CarePlanStart",
+  codes = list(diabetes_careplan_code),
   activities = list(create_component_settings("code",
-    system = "SNOMED-CT", code = "160670007", display = "Diabetic diet")),
+    system = "SNOMED-CT", code = "160670007", display = "Diabetic diet"
+  )),
   goals = list(create_component_settings("code",
-    system = "SNOMED-CT", code = "160688004", display = "Weight reduction")),
-  transition = direct("Next"))
+    system = "SNOMED-CT", code = "160688004", display = "Weight reduction"
+  )),
+  transition = direct("Next")
+)
 create_state_settings("CarePlanEnd", careplan = "Start Care Plan", transition = direct("Next"))
 ```
 
@@ -189,14 +218,20 @@ create_state_settings("CarePlanEnd", careplan = "Start Care Plan", transition = 
 1-100 -- the highest value across all causes drives urgency logic elsewhere in Synthea:
 
 ```{r clinical-events}
-create_state_settings("Procedure", codes = list(strep_code),
+create_state_settings("Procedure",
+  codes = list(strep_code),
   duration = create_component_settings("exact", quantity = 30, unit = "minutes"),
-  transition = direct("Next"))
-create_state_settings("Symptom", symptom = "Chest Pain",
+  transition = direct("Next")
+)
+create_state_settings("Symptom",
+  symptom = "Chest Pain",
   range = create_component_settings("range", low = 10, high = 40),
-  transition = direct("Next"))
-create_state_settings("VitalSign", vital_sign = "BMI", unit = "kg/m2",
-  exact = create_component_settings("exact", quantity = 24), transition = direct("Next"))
+  transition = direct("Next")
+)
+create_state_settings("VitalSign",
+  vital_sign = "BMI", unit = "kg/m2",
+  exact = create_component_settings("exact", quantity = 24), transition = direct("Next")
+)
 ```
 
 Omitting both `range` and `exact` on `Death` means immediate death; giving one delays it:
@@ -210,9 +245,12 @@ create_state_settings("Death", condition_onset = "Condition Onset", transition =
 
 ```{r vaccine}
 flu_vaccine_code <- create_component_settings("code",
-  system = "CVX", code = "141", display = "Influenza, seasonal, injectable")
-create_state_settings("Vaccine", series = 1, codes = list(flu_vaccine_code),
-  transition = direct("Next"))
+  system = "CVX", code = "141", display = "Influenza, seasonal, injectable"
+)
+create_state_settings("Vaccine",
+  series = 1, codes = list(flu_vaccine_code),
+  transition = direct("Next")
+)
 ```
 
 ## Observations and imaging
@@ -221,10 +259,13 @@ A standalone `Observation` (used as its own state, so `transition` applies norma
 
 ```{r observation}
 temperature_code <- create_component_settings("code",
-  system = "LOINC", code = "8310-5", display = "Body temperature")
-create_state_settings("Observation", codes = list(temperature_code),
+  system = "LOINC", code = "8310-5", display = "Body temperature"
+)
+create_state_settings("Observation",
+  codes = list(temperature_code),
   exact = create_component_settings("exact", quantity = 98.6, unit = "degF"), unit = "degF",
-  category = "vital-signs", transition = direct("Next"))
+  category = "vital-signs", transition = direct("Next")
+)
 ```
 
 `MultiObservation` and `DiagnosticReport` both take a list of nested `Observation`-shaped
@@ -233,33 +274,46 @@ where `Observation`'s transition is optional rather than required, per `vignette
 
 ```{r multiobservation}
 systolic_code <- create_component_settings("code",
-  system = "LOINC", code = "8480-6", display = "Systolic blood pressure")
+  system = "LOINC", code = "8480-6", display = "Systolic blood pressure"
+)
 diastolic_code <- create_component_settings("code",
-  system = "LOINC", code = "8462-4", display = "Diastolic blood pressure")
+  system = "LOINC", code = "8462-4", display = "Diastolic blood pressure"
+)
 
 bp_panel_code <- create_component_settings("code",
-  system = "LOINC", code = "35094-2", display = "Blood pressure panel")
+  system = "LOINC", code = "35094-2", display = "Blood pressure panel"
+)
 
-create_state_settings("MultiObservation", codes = list(bp_panel_code),
+create_state_settings("MultiObservation",
+  codes = list(bp_panel_code),
   observations = list(
-    create_state_settings("Observation", codes = list(systolic_code),
-      exact = create_component_settings("exact", quantity = 120), unit = "mmHg"),
-    create_state_settings("Observation", codes = list(diastolic_code),
-      exact = create_component_settings("exact", quantity = 80), unit = "mmHg")
+    create_state_settings("Observation",
+      codes = list(systolic_code),
+      exact = create_component_settings("exact", quantity = 120), unit = "mmHg"
+    ),
+    create_state_settings("Observation",
+      codes = list(diastolic_code),
+      exact = create_component_settings("exact", quantity = 80), unit = "mmHg"
+    )
   ),
-  transition = direct("Next"))
+  transition = direct("Next")
+)
 ```
 
 `DiagnosticReport` is the same shape as `MultiObservation`, just without the optional `category`
 field:
 
 ```{r diagnosticreport}
-create_state_settings("DiagnosticReport", codes = list(bp_panel_code),
+create_state_settings("DiagnosticReport",
+  codes = list(bp_panel_code),
   observations = list(
-    create_state_settings("Observation", codes = list(systolic_code),
-      exact = create_component_settings("exact", quantity = 120), unit = "mmHg")
+    create_state_settings("Observation",
+      codes = list(systolic_code),
+      exact = create_component_settings("exact", quantity = 120), unit = "mmHg"
+    )
   ),
-  transition = direct("Next"))
+  transition = direct("Next")
+)
 ```
 
 `ImagingStudy`'s `series` items follow `HealthRecord.ImagingStudy.Series`'s shape
@@ -268,23 +322,28 @@ independently validated:
 
 ```{r imagingstudy}
 xray_procedure_code <- create_component_settings("code",
-  system = "SNOMED-CT", code = "399208008", display = "Plain chest X-ray")
+  system = "SNOMED-CT", code = "399208008", display = "Plain chest X-ray"
+)
 
 create_state_settings("ImagingStudy",
   procedure_code = xray_procedure_code,
   series = list(list(
     modality = create_component_settings("code",
-      system = "DICOM-DCM", code = "DX", display = "Digital Radiography"),
+      system = "DICOM-DCM", code = "DX", display = "Digital Radiography"
+    ),
     body_site = create_component_settings("code",
-      system = "SNOMED-CT", code = "51185008", display = "Thoracic structure"),
+      system = "SNOMED-CT", code = "51185008", display = "Thoracic structure"
+    ),
     instances = list(list(
       title = "Chest X-ray, PA view",
       sop_class = create_component_settings("code",
         system = "DICOM-SOP", code = "1.2.840.10008.5.1.4.1.1.1.1",
-        display = "Digital X-Ray Image Storage")
+        display = "Digital X-Ray Image Storage"
+      )
     ))
   )),
-  transition = direct("Next"))
+  transition = direct("Next")
+)
 ```
 
 ## Devices and supplies
@@ -294,10 +353,13 @@ asymmetry `vignette("layers")` calls out explicitly:
 
 ```{r devices}
 pacemaker_code <- create_component_settings("code",
-  system = "SNOMED-CT", code = "14106009", display = "Cardiac pacemaker")
+  system = "SNOMED-CT", code = "14106009", display = "Cardiac pacemaker"
+)
 
-create_state_settings("Device", code = pacemaker_code,
-  manufacturer = "Acme Medical", model = "X100", transition = direct("Next"))
+create_state_settings("Device",
+  code = pacemaker_code,
+  manufacturer = "Acme Medical", model = "X100", transition = direct("Next")
+)
 create_state_settings("DeviceEnd", device = "Implant Device", transition = direct("Next"))
 ```
 
@@ -306,11 +368,13 @@ independently validated:
 
 ```{r supplylist}
 gauze_code <- create_component_settings("code",
-  system = "SNOMED-CT", code = "705076002", display = "Sterile gauze dressing")
+  system = "SNOMED-CT", code = "705076002", display = "Sterile gauze dressing"
+)
 
 create_state_settings("SupplyList",
   supplies = list(list(code = gauze_code, quantity = 10)),
-  transition = direct("Next"))
+  transition = direct("Next")
+)
 ```
 
 ## Where to go from here

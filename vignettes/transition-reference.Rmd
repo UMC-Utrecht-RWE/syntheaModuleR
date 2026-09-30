@@ -39,8 +39,10 @@ library(syntheaModuleR)
 create_transition_settings("direct", to = "Diagnosis Encounter")
 
 create_transition_settings("conditional", options = list(
-  list(condition = create_logic_settings("Age", operator = ">=", quantity = 18, unit = "years"),
-       transition = "Adult Dosing"),
+  list(
+    condition = create_logic_settings("Age", operator = ">=", quantity = 18, unit = "years"),
+    transition = "Adult Dosing"
+  ),
   list(transition = "Pediatric Dosing")
 ))
 
@@ -59,8 +61,10 @@ probability" in one place. Here, female patients always go to one pathway; every
 
 ```{r complex}
 create_transition_settings("complex", options = list(
-  list(condition = create_logic_settings("Gender", gender = "F"),
-       transition = "Female Pathway"),
+  list(
+    condition = create_logic_settings("Gender", gender = "F"),
+    transition = "Female Pathway"
+  ),
   list(distributions = list(
     list(transition = "Pathway A", distribution = 0.5),
     list(transition = "Pathway B", distribution = 0.5)
@@ -89,7 +93,8 @@ create_transition_settings("lookup_table",
   options = list(
     list(transition = "High Risk Path", default_probability = 0.3),
     list(transition = "Low Risk Path", default_probability = 0.7)
-  ))
+  )
+)
 ```
 
 ## `type_of_care`
@@ -100,5 +105,6 @@ wires the three state-name targets:
 
 ```{r type_of_care}
 create_transition_settings("type_of_care",
-  ambulatory = "Ambulatory Visit", telemedicine = "Telemedicine Visit", emergency = "ER Visit")
+  ambulatory = "Ambulatory Visit", telemedicine = "Telemedicine Visit", emergency = "ER Visit"
+)
 ```

@@ -64,12 +64,14 @@ package's own small builder functions, not written as raw lists:
 
 ```{r states-conditiononset}
 strep_code <- create_component_settings("code",
-  system = "SNOMED-CT", code = "43878008", display = "Streptococcal sore throat (disorder)")
+  system = "SNOMED-CT", code = "43878008", display = "Streptococcal sore throat (disorder)"
+)
 
 onset <- create_state_settings("ConditionOnset",
   codes = list(strep_code),
   target_encounter = "Diagnosis Encounter",
-  transition = create_transition_settings("direct", to = "Diagnosis Encounter"))
+  transition = create_transition_settings("direct", to = "Diagnosis Encounter")
+)
 str(onset)
 ```
 
@@ -82,7 +84,8 @@ adult <- create_logic_settings("Age", operator = ">=", quantity = 18, unit = "ye
 
 age_gate <- create_state_settings("Guard",
   allow = adult,
-  transition = create_transition_settings("direct", to = "Condition Onset"))
+  transition = create_transition_settings("direct", to = "Condition Onset")
+)
 ```
 
 Two field names are deliberately reused with a different meaning depending on `type`, rather than
@@ -186,7 +189,7 @@ create_transition_settings("direct", to = "Diagnosis Encounter")
 ```{r transitions-conditional}
 create_transition_settings("conditional", options = list(
   list(condition = adult, transition = "Adult Dosing"),
-  list(transition = "Pediatric Dosing")  # condition omitted on the last option = the else branch
+  list(transition = "Pediatric Dosing") # condition omitted on the last option = the else branch
 ))
 ```
 
@@ -227,12 +230,14 @@ engine's own load-time invariants entirely at the graph level:
 ```{r module-minimal}
 states <- list(
   Initial = create_state_settings("Initial",
-    transition = create_transition_settings("direct", to = "Age Gate")),
+    transition = create_transition_settings("direct", to = "Age Gate")
+  ),
   "Age Gate" = age_gate,
   "Condition Onset" = onset,
   "Diagnosis Encounter" = create_state_settings("Encounter",
     wellness = TRUE,
-    transition = create_transition_settings("direct", to = "Terminal")),
+    transition = create_transition_settings("direct", to = "Terminal")
+  ),
   Terminal = create_state_settings("Terminal")
 )
 

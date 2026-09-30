@@ -62,8 +62,10 @@ create_component_settings("distribution", kind = "UNIFORM", low = 10, high = 20)
 
 ```{r gaussian}
 # min/max here clamp the sample to a range -- a truncated Gaussian, not a hard requirement.
-create_component_settings("distribution", kind = "GAUSSIAN",
-  mean = 120, standardDeviation = 15, min = 90, max = 180)
+create_component_settings("distribution",
+  kind = "GAUSSIAN",
+  mean = 120, standardDeviation = 15, min = 90, max = 180
+)
 ```
 
 ```{r exponential}
@@ -121,7 +123,8 @@ reaches `build_module()`:
 create_state_settings("Delay",
   exact = create_component_settings("exact", quantity = 5, unit = "days"),
   distribution = create_component_settings("distribution", kind = "EXACT", value = 5),
-  transition = create_transition_settings("direct", to = "Next"))
+  transition = create_transition_settings("direct", to = "Next")
+)
 ```
 
 `SetAttribute` is the one exception worth calling out explicitly: it accepts `distribution`
@@ -135,24 +138,28 @@ literal `value`. Passing both `range` and `distribution` to a `SetAttribute` is 
 ## Worked example: a two-dose delay and a sampled vital sign
 
 ```{r worked-example}
-dose_interval <- create_component_settings("distribution", kind = "TRIANGULAR",
-  min = 17, mode = 21, max = 28)  # realistic real-world dosing window, peaked at the trial's 21 days
+dose_interval <- create_component_settings("distribution",
+  kind = "TRIANGULAR",
+  min = 17, mode = 21, max = 28
+) # realistic real-world dosing window, peaked at the trial's 21 days
 
-bmi_sample <- create_component_settings("distribution", kind = "GAUSSIAN",
-  mean = 27, standardDeviation = 5, min = 15, max = 50)
+bmi_sample <- create_component_settings("distribution",
+  kind = "GAUSSIAN",
+  mean = 27, standardDeviation = 5, min = 15, max = 50
+)
 
 states <- list(
   Initial = create_state_settings("Initial",
-    transition = create_transition_settings("direct", to = "Record BMI")),
-
+    transition = create_transition_settings("direct", to = "Record BMI")
+  ),
   "Record BMI" = create_state_settings("VitalSign",
     vital_sign = "BMI", unit = "kg/m2", distribution = bmi_sample,
-    transition = create_transition_settings("direct", to = "Dose Interval")),
-
+    transition = create_transition_settings("direct", to = "Dose Interval")
+  ),
   "Dose Interval" = create_state_settings("Delay",
     distribution = dose_interval, unit = "days",
-    transition = create_transition_settings("direct", to = "Terminal")),
-
+    transition = create_transition_settings("direct", to = "Terminal")
+  ),
   Terminal = create_state_settings("Terminal")
 )
 

@@ -42,8 +42,10 @@ test_that("Symptom (logic) requires symptom/operator/value", {
 test_that("Observation (logic) requires operator and exactly one of codes/referenced_by_attribute", {
   expect_error(create_logic_settings("Observation", operator = "=="), "exactly one of")
   expect_error(
-    create_logic_settings("Observation", operator = "==",
-                           codes = list(a_code()), referenced_by_attribute = "x"),
+    create_logic_settings("Observation",
+      operator = "==",
+      codes = list(a_code()), referenced_by_attribute = "x"
+    ),
     "exactly one of"
   )
   x <- create_logic_settings("Observation", operator = "is nil", referenced_by_attribute = "bp")
@@ -70,8 +72,10 @@ test_that("And/Or wrap nested conditions as an array", {
   cond_or <- create_logic_settings("Or", conditions = list(create_logic_settings("Gender", gender = "M")))
   expect_equal(cond_or$condition_type, "Or")
 
-  expect_error(create_logic_settings("And", conditions = create_logic_settings("Gender", gender = "F")),
-               "looks like a single item")
+  expect_error(
+    create_logic_settings("And", conditions = create_logic_settings("Gender", gender = "F")),
+    "looks like a single item"
+  )
 })
 
 test_that("Not wraps exactly one condition, singular (not an array)", {
@@ -117,14 +121,17 @@ test_that("ActiveCondition/ActiveAllergy/ActiveMedication/ActiveCarePlan need ex
     expect_equal(ok_attr$referenced_by_attribute, "x")
     expect_error(
       create_logic_settings(ct, codes = list(a_code()), referenced_by_attribute = "x"),
-      "exactly one of", info = ct
+      "exactly one of",
+      info = ct
     )
   }
 })
 
 test_that("VitalSign (logic) requires vital_sign/operator/value", {
-  x <- create_logic_settings("VitalSign", vital_sign = "Blood Pressure Systolic",
-                              operator = ">", value = 140)
+  x <- create_logic_settings("VitalSign",
+    vital_sign = "Blood Pressure Systolic",
+    operator = ">", value = 140
+  )
   expect_equal(x$condition_type, "VitalSign")
   expect_error(create_logic_settings("VitalSign", vital_sign = "x"), "missing required field")
 })

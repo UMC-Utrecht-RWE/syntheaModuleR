@@ -22,13 +22,14 @@
 #' @examples
 #' states <- list(
 #'   Initial = create_state_settings("Initial",
-#'     transition = create_transition_settings("direct", to = "Terminal")),
+#'     transition = create_transition_settings("direct", to = "Terminal")
+#'   ),
 #'   Terminal = create_state_settings("Terminal")
 #' )
 #' build_module("Minimal Example", states)
 #' @export
 build_module <- function(name, states, specialty = NULL, remarks = NULL, gmf_version = 2,
-                          as_json = TRUE, pretty = TRUE, validate = TRUE) {
+                         as_json = TRUE, pretty = TRUE, validate = TRUE) {
   stopifnot(is.character(name), length(name) == 1, nzchar(name))
   stopifnot(is.list(states), length(states) > 0)
   if (is.null(names(states)) || any(!nzchar(names(states)))) {
@@ -70,15 +71,18 @@ build_module <- function(name, states, specialty = NULL, remarks = NULL, gmf_ver
 #' @examples
 #' states <- list(
 #'   Initial = create_state_settings("Initial",
-#'     transition = create_transition_settings("direct", to = "Terminal")),
+#'     transition = create_transition_settings("direct", to = "Terminal")
+#'   ),
 #'   Terminal = create_state_settings("Terminal")
 #' )
 #' module <- build_module("Minimal Example", states, as_json = FALSE)
 #' validate_module(module)
 #' @export
 validate_module <- function(module_list) {
-  transition_keys <- c("direct_transition", "distributed_transition", "conditional_transition",
-                        "complex_transition", "lookup_table_transition", "type_of_care_transition")
+  transition_keys <- c(
+    "direct_transition", "distributed_transition", "conditional_transition",
+    "complex_transition", "lookup_table_transition", "type_of_care_transition"
+  )
 
   if (is.null(module_list$states) || length(module_list$states) == 0) {
     stop("Module has no states")
@@ -110,8 +114,10 @@ validate_module <- function(module_list) {
         stop(sprintf("State '%s' (type %s) has no transition property", nm, st$type))
       }
       if (length(present) > 1) {
-        stop(sprintf("State '%s' has more than one transition property: %s",
-                      nm, paste(present, collapse = ", ")))
+        stop(sprintf(
+          "State '%s' has more than one transition property: %s",
+          nm, paste(present, collapse = ", ")
+        ))
       }
     }
   }
@@ -123,12 +129,16 @@ validate_module <- function(module_list) {
       referenced <- c(referenced, st$direct_transition)
     }
     if (!is.null(st$distributed_transition)) {
-      referenced <- c(referenced, vapply(st$distributed_transition,
-                                          function(o) o$transition, character(1)))
+      referenced <- c(referenced, vapply(
+        st$distributed_transition,
+        function(o) o$transition, character(1)
+      ))
     }
     if (!is.null(st$conditional_transition)) {
-      referenced <- c(referenced, vapply(st$conditional_transition,
-                                          function(o) o$transition, character(1)))
+      referenced <- c(referenced, vapply(
+        st$conditional_transition,
+        function(o) o$transition, character(1)
+      ))
     }
     if (!is.null(st$complex_transition)) {
       for (o in st$complex_transition) {
@@ -164,7 +174,8 @@ validate_module <- function(module_list) {
 #' @examples
 #' states <- list(
 #'   Initial = create_state_settings("Initial",
-#'     transition = create_transition_settings("direct", to = "Terminal")),
+#'     transition = create_transition_settings("direct", to = "Terminal")
+#'   ),
 #'   Terminal = create_state_settings("Terminal")
 #' )
 #' module_json <- build_module("Minimal Example", states)
@@ -206,28 +217,34 @@ write_module_json <- function(x, path) {
 #' @param gmf_version GMF version number to record in the module header. Default 2.
 #' @return An R list mirroring the module JSON tree.
 #' @examples
-#' hypertension_code <- create_component_settings("code", system = "SNOMED-CT",
-#'                                                 code = "38341003", display = "Hypertension")
-#' build_disease_module("Hypertension", condition_code = hypertension_code,
-#'                       diagnosis = "wellness")
+#' hypertension_code <- create_component_settings("code",
+#'   system = "SNOMED-CT",
+#'   code = "38341003", display = "Hypertension"
+#' )
+#' build_disease_module("Hypertension",
+#'   condition_code = hypertension_code,
+#'   diagnosis = "wellness"
+#' )
 #' @export
 build_disease_module <- function(name,
-                                  condition_code,
-                                  diagnosis = c("wellness", "standalone"),
-                                  encounter_class = NULL,
-                                  onset_delay = NULL,
-                                  age_gate = NULL,
-                                  resolves_after = NULL,
-                                  death = NULL,
-                                  remarks = NULL,
-                                  gmf_version = 2) {
+                                 condition_code,
+                                 diagnosis = c("wellness", "standalone"),
+                                 encounter_class = NULL,
+                                 onset_delay = NULL,
+                                 age_gate = NULL,
+                                 resolves_after = NULL,
+                                 death = NULL,
+                                 remarks = NULL,
+                                 gmf_version = 2) {
   diagnosis <- match.arg(diagnosis)
   if (diagnosis == "standalone" && (is.null(encounter_class) || !nzchar(encounter_class))) {
     stop("encounter_class is required when diagnosis = \"standalone\"")
   }
   if (!is.null(death)) {
-    stopifnot(is.list(death), "probability" %in% names(death),
-              is.numeric(death$probability), death$probability > 0, death$probability <= 1)
+    stopifnot(
+      is.list(death), "probability" %in% names(death),
+      is.numeric(death$probability), death$probability > 0, death$probability <= 1
+    )
   }
 
   onset_name <- "Condition Onset"
@@ -249,60 +266,78 @@ build_disease_module <- function(name,
   if (!is.null(age_gate)) {
     nxt <- full_chain[which(chain == "Age Gate") + 1]
     states[["Age Gate"]] <- create_state_settings("Guard",
-      allow = create_logic_settings("Age", operator = age_gate$operator,
-                                     quantity = age_gate$quantity, unit = age_gate$unit),
-      transition = create_transition_settings("direct", to = nxt))
+      allow = create_logic_settings("Age",
+        operator = age_gate$operator,
+        quantity = age_gate$quantity, unit = age_gate$unit
+      ),
+      transition = create_transition_settings("direct", to = nxt)
+    )
   }
   if (!is.null(onset_delay)) {
     nxt <- full_chain[which(chain == "Onset Delay") + 1]
     states[["Onset Delay"]] <- create_state_settings("Delay",
-      range = create_component_settings("range", low = onset_delay$low, high = onset_delay$high,
-                                         unit = onset_delay$unit),
-      transition = create_transition_settings("direct", to = nxt))
+      range = create_component_settings("range",
+        low = onset_delay$low, high = onset_delay$high,
+        unit = onset_delay$unit
+      ),
+      transition = create_transition_settings("direct", to = nxt)
+    )
   }
 
   states[[onset_name]] <- create_state_settings("ConditionOnset",
     codes = list(condition_code),
     target_encounter = encounter_name,
-    transition = create_transition_settings("direct", to = encounter_name))
+    transition = create_transition_settings("direct", to = encounter_name)
+  )
 
   encounter_fields <- if (diagnosis == "wellness") list(wellness = TRUE) else list(encounter_class = encounter_class)
   states[[encounter_name]] <- do.call(create_state_settings, c(
     list(type = "Encounter"), encounter_fields,
-    list(transition = create_transition_settings("direct", to = encounter_end_name))))
+    list(transition = create_transition_settings("direct", to = encounter_end_name))
+  ))
 
   if (!is.null(resolves_after)) {
     states[[resolve_delay_name]] <- create_state_settings("Delay",
-      range = create_component_settings("range", low = resolves_after$low, high = resolves_after$high,
-                                         unit = resolves_after$unit),
-      transition = create_transition_settings("direct", to = resolve_name))
+      range = create_component_settings("range",
+        low = resolves_after$low, high = resolves_after$high,
+        unit = resolves_after$unit
+      ),
+      transition = create_transition_settings("direct", to = resolve_name)
+    )
     states[[resolve_name]] <- create_state_settings("ConditionEnd",
       condition_onset = onset_name,
-      transition = create_transition_settings("direct", to = "Terminal"))
+      transition = create_transition_settings("direct", to = "Terminal")
+    )
   }
 
   if (!is.null(death)) {
     death_fields <- if (!is.null(death$code)) list(codes = list(death$code)) else list(condition_onset = onset_name)
     states[["Death"]] <- do.call(create_state_settings, c(
       list(type = "Death"), death_fields,
-      list(transition = create_transition_settings("direct", to = "Terminal"))))
+      list(transition = create_transition_settings("direct", to = "Terminal"))
+    ))
 
     states[[encounter_end_name]] <- create_state_settings("EncounterEnd",
       transition = create_transition_settings("distributed", options = list(
         list(transition = "Death", distribution = death$probability),
         list(transition = next_after_encounter, distribution = 1 - death$probability)
-      )))
+      ))
+    )
   } else {
     states[[encounter_end_name]] <- create_state_settings("EncounterEnd",
-      transition = create_transition_settings("direct", to = next_after_encounter))
+      transition = create_transition_settings("direct", to = next_after_encounter)
+    )
   }
 
   states[["Initial"]] <- create_state_settings("Initial",
-    transition = create_transition_settings("direct", to = chain[1]))
+    transition = create_transition_settings("direct", to = chain[1])
+  )
   states[["Terminal"]] <- create_state_settings("Terminal")
 
-  build_module(name = name, states = states, remarks = remarks, gmf_version = gmf_version,
-               as_json = FALSE)
+  build_module(
+    name = name, states = states, remarks = remarks, gmf_version = gmf_version,
+    as_json = FALSE
+  )
 }
 
 #' The Frontend layer's finisher: turn a fragment (from chain()/pathways()/classify()/
@@ -322,18 +357,23 @@ build_disease_module <- function(name,
 #'   anything if it fails.
 #' @return The validated module: a JSON string (as_json = TRUE) or an R list (as_json = FALSE).
 #' @examples
-#' diabetes <- create_component_settings("code", system = "SNOMED-CT", code = "44054006",
-#'                                        display = "Diabetes mellitus type 2 (disorder)")
+#' diabetes <- create_component_settings("code",
+#'   system = "SNOMED-CT", code = "44054006",
+#'   display = "Diabetes mellitus type 2 (disorder)"
+#' )
 #' build_cohort_module("Diabetes Cohort", create_condition("Diabetes", diabetes))
 #' @export
 build_cohort_module <- function(name, fragment, remarks = NULL, gmf_version = 2, as_json = TRUE,
-                                 validate = TRUE) {
+                                validate = TRUE) {
   states <- fragment$states
   states[[fragment$exit]]$direct_transition <- "Terminal"
   states[["Initial"]] <- create_state_settings("Initial",
-    transition = create_transition_settings("direct", to = fragment$entry))
+    transition = create_transition_settings("direct", to = fragment$entry)
+  )
   states[["Terminal"]] <- create_state_settings("Terminal")
 
-  build_module(name = name, states = states, remarks = remarks, gmf_version = gmf_version,
-               as_json = as_json, pretty = TRUE, validate = validate)
+  build_module(
+    name = name, states = states, remarks = remarks, gmf_version = gmf_version,
+    as_json = as_json, pretty = TRUE, validate = validate
+  )
 }

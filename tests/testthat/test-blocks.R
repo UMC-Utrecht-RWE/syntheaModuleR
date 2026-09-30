@@ -36,8 +36,10 @@ test_that("create_guard wraps a Logic condition in a Guard fragment", {
 })
 
 test_that("create_population combines given demographic filters with And", {
-  frag <- create_population("Adults", age = list(operator = ">=", quantity = 18, unit = "years"),
-                             gender = "F")
+  frag <- create_population("Adults",
+    age = list(operator = ">=", quantity = 18, unit = "years"),
+    gender = "F"
+  )
   expect_fragment(frag, entry = "Adults", exit = "Adults")
   expect_equal(frag$states$Adults$allow$condition_type, "And")
   expect_length(frag$states$Adults$allow$conditions, 2)
@@ -73,9 +75,11 @@ test_that("create_condition standalone diagnosis requires encounter_class", {
 })
 
 test_that("create_condition wires an onset_delay in front and resolves_after behind", {
-  frag <- create_condition("X", a_code(), diagnosis = "wellness",
+  frag <- create_condition("X", a_code(),
+    diagnosis = "wellness",
     onset_delay = list(low = 1, high = 3, unit = "months"),
-    resolves_after = list(low = 6, high = 12, unit = "months"))
+    resolves_after = list(low = 6, high = 12, unit = "months")
+  )
   expect_equal(frag$entry, "X Onset Delay")
   expect_equal(frag$states[["X Onset Delay"]]$direct_transition, "X")
   expect_equal(frag$exit, "X Resolves")
@@ -91,8 +95,10 @@ test_that("create_medication defaults to chronic (long) with no end", {
 })
 
 test_that("create_medication short duration appends a course Delay -> MedicationEnd", {
-  frag <- create_medication("Metformin", another_code(), condition = "Diabetes",
-    duration = "short", course = list(low = 30, high = 30, unit = "days"))
+  frag <- create_medication("Metformin", another_code(),
+    condition = "Diabetes",
+    duration = "short", course = list(low = 30, high = 30, unit = "days")
+  )
   expect_equal(frag$entry, "Metformin")
   expect_equal(frag$exit, "Metformin Course End")
   expect_false(frag$states$Metformin$chronic)
@@ -132,12 +138,16 @@ test_that("create_vital_sign mirrors create_observation's value convenience", {
 })
 
 test_that("create_procedure supports an optional condition reason and length", {
-  frag <- create_procedure("Appendectomy", a_code(), condition = "Appendicitis",
-                            length = list(low = 30, high = 60, unit = "minutes"))
+  frag <- create_procedure("Appendectomy", a_code(),
+    condition = "Appendicitis",
+    length = list(low = 30, high = 60, unit = "minutes")
+  )
   expect_fragment(frag)
   expect_equal(frag$states$Appendectomy$reason, "Appendicitis")
-  expect_equal(frag$states$Appendectomy$duration,
-               create_component_settings("range", low = 30, high = 60, unit = "minutes"))
+  expect_equal(
+    frag$states$Appendectomy$duration,
+    create_component_settings("range", low = 30, high = 60, unit = "minutes")
+  )
 })
 
 test_that("create_procedure omits duration when length is not given", {
@@ -149,8 +159,10 @@ test_that("create_death supports condition, codes, and a delay", {
   frag <- create_death(condition = "Diabetes", after = list(low = 1, high = 10, unit = "years"))
   expect_fragment(frag, entry = "Death", exit = "Death")
   expect_equal(frag$states$Death$condition_onset, "Diabetes")
-  expect_equal(frag$states$Death$range,
-               create_component_settings("range", low = 1, high = 10, unit = "years"))
+  expect_equal(
+    frag$states$Death$range,
+    create_component_settings("range", low = 1, high = 10, unit = "years")
+  )
 })
 
 test_that("create_encounter builds an Encounter/EncounterEnd pair", {
@@ -172,7 +184,8 @@ test_that("create_allergy without resolves_after is a single-state fragment", {
 
 test_that("create_allergy with resolves_after appends Delay -> AllergyEnd", {
   frag <- create_allergy("Penicillin Allergy", a_code(),
-                          resolves_after = list(low = 1, high = 2, unit = "years"))
+    resolves_after = list(low = 1, high = 2, unit = "years")
+  )
   expect_equal(frag$entry, "Penicillin Allergy")
   expect_equal(frag$exit, "Penicillin Allergy Resolves")
   expect_equal(frag$states[["Penicillin Allergy Resolves"]]$allergy_onset, "Penicillin Allergy")
@@ -183,7 +196,8 @@ test_that("create_careplan mirrors create_allergy's optional resolution", {
   expect_fragment(frag, entry = "Diabetes Care Plan", exit = "Diabetes Care Plan")
 
   frag2 <- create_careplan("Diabetes Care Plan", a_code(),
-                            resolves_after = list(low = 6, high = 12, unit = "months"))
+    resolves_after = list(low = 6, high = 12, unit = "months")
+  )
   expect_equal(frag2$exit, "Diabetes Care Plan Resolves")
   expect_equal(frag2$states[["Diabetes Care Plan Resolves"]]$type, "CarePlanEnd")
 })

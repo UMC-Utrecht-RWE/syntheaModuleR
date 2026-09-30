@@ -93,20 +93,26 @@ test_that("lookup_table transition requires lookup_table_name and default_probab
   expect_equal(x$lookup_table_transition[[1]]$lookup_table_name, "risk.csv")
 
   expect_error(
-    create_transition_settings("lookup_table", lookup_table_name = "risk.csv",
-                                options = list(list(transition = "A"))),
+    create_transition_settings("lookup_table",
+      lookup_table_name = "risk.csv",
+      options = list(list(transition = "A"))
+    ),
     "each option needs 'transition' and 'default_probability'"
   )
 })
 
 test_that("type_of_care transition requires ambulatory/telemedicine/emergency", {
-  x <- create_transition_settings("type_of_care", ambulatory = "A",
-                                   telemedicine = "T", emergency = "E")
+  x <- create_transition_settings("type_of_care",
+    ambulatory = "A",
+    telemedicine = "T", emergency = "E"
+  )
   expect_equal(x, list(type_of_care_transition = list(
     ambulatory = "A", telemedicine = "T", emergency = "E"
   )))
-  expect_error(create_transition_settings("type_of_care", ambulatory = "A"),
-               "missing required field")
+  expect_error(
+    create_transition_settings("type_of_care", ambulatory = "A"),
+    "missing required field"
+  )
 })
 
 test_that("unknown transition kind errors", {

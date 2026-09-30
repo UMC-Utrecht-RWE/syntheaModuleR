@@ -37,8 +37,10 @@
 
   unknown <- setdiff(given, allowed)
   if (length(unknown) > 0) {
-    stop(sprintf("%s: unknown field(s): %s (allowed: %s)",
-                 label, paste(unknown, collapse = ", "), paste(allowed, collapse = ", ")))
+    stop(sprintf(
+      "%s: unknown field(s): %s (allowed: %s)",
+      label, paste(unknown, collapse = ", "), paste(allowed, collapse = ", ")
+    ))
   }
   missing_req <- setdiff(entry$required, given)
   if (length(missing_req) > 0) {
@@ -47,13 +49,17 @@
   for (grp in entry$one_of) {
     present <- intersect(grp$fields, given)
     if (isTRUE(grp$required) && length(present) != 1) {
-      stop(sprintf("%s: exactly one of {%s} must be given (got: %s)", label,
-                   paste(grp$fields, collapse = ", "),
-                   if (length(present) == 0) "none" else paste(present, collapse = ", ")))
+      stop(sprintf(
+        "%s: exactly one of {%s} must be given (got: %s)", label,
+        paste(grp$fields, collapse = ", "),
+        if (length(present) == 0) "none" else paste(present, collapse = ", ")
+      ))
     }
     if (!isTRUE(grp$required) && length(present) > 1) {
-      stop(sprintf("%s: at most one of {%s} may be given (got: %s)", label,
-                   paste(grp$fields, collapse = ", "), paste(present, collapse = ", ")))
+      stop(sprintf(
+        "%s: at most one of {%s} may be given (got: %s)", label,
+        paste(grp$fields, collapse = ", "), paste(present, collapse = ", ")
+      ))
     }
   }
   invisible(TRUE)
@@ -85,8 +91,10 @@
     }
     val_names <- names(val)
     if (!is.null(val_names) && any(nzchar(val_names))) {
-      stop(sprintf(paste0("field '%s' looks like a single item (a named list), not a list of ",
-                           "items -- per the array rule, wrap it: %s = list(<that item>)"), nm, nm))
+      stop(sprintf(paste0(
+        "field '%s' looks like a single item (a named list), not a list of ",
+        "items -- per the array rule, wrap it: %s = list(<that item>)"
+      ), nm, nm))
     }
     fields[[nm]] <- unname(val)
   }
@@ -120,8 +128,10 @@
 .build_settings <- function(schema, key, fields, label, discriminator_field = NULL) {
   entry <- schema[[key]]
   if (is.null(entry)) {
-    stop(sprintf("%s: unknown type '%s'. Valid types: %s",
-                 label, key, paste(names(schema), collapse = ", ")))
+    stop(sprintf(
+      "%s: unknown type '%s'. Valid types: %s",
+      label, key, paste(names(schema), collapse = ", ")
+    ))
   }
   .validate_settings(entry, fields, sprintf("%s '%s'", label, key))
   fields <- .apply_array_rule(entry, fields)
@@ -140,31 +150,35 @@
 
 .component_schema <- list(
   code = list(required = c("system", "code", "display"), optional = c()),
-
   range = list(required = c("low", "high"), optional = c("unit", "decimals")),
-
   exact = list(required = c("quantity"), optional = c("unit")),
-
-  date_input = list(required = c("year", "month", "day"),
-                     optional = c("hour", "minute", "second", "millisecond")),
-
-  sampled_data = list(required = c("origin_value", "attributes"),
-                       optional = c("factor", "lower_limit", "upper_limit", "decimal_format"),
-                       array = c("attributes")),
-
-  attachment = list(required = c(),
-                     optional = c("content_type", "language", "title", "creation",
-                                  "height", "width", "frames", "duration", "pages",
-                                  "chart", "url", "data"),
-                     one_of = list(list(fields = c("chart", "url", "data"), required = TRUE))),
+  date_input = list(
+    required = c("year", "month", "day"),
+    optional = c("hour", "minute", "second", "millisecond")
+  ),
+  sampled_data = list(
+    required = c("origin_value", "attributes"),
+    optional = c("factor", "lower_limit", "upper_limit", "decimal_format"),
+    array = c("attributes")
+  ),
+  attachment = list(
+    required = c(),
+    optional = c(
+      "content_type", "language", "title", "creation",
+      "height", "width", "frames", "duration", "pages",
+      "chart", "url", "data"
+    ),
+    one_of = list(list(fields = c("chart", "url", "data"), required = TRUE))
+  ),
 
   # Distribution (Distribution.java) is handled specially in create_component_settings(): `kind`
   # selects which parameter keys (inside the `parameters` map) are required/optional, per
   # Distribution.validate(). This entry only covers the two flat fields.
   distribution = list(required = c("kind"), optional = c("round")),
-
-  io_mapper = list(required = c("type"),
-                    optional = c("from", "to", "from_list", "from_exp", "variance", "vital_sign"))
+  io_mapper = list(
+    required = c("type"),
+    optional = c("from", "to", "from_list", "from_exp", "variance", "vital_sign")
+  )
 )
 
 # Distribution.Kind-specific parameter requirements (Distribution.java validate()/generate()).
@@ -173,11 +187,11 @@
 # policy only rewrites declared Java field names, not arbitrary map keys) -- so
 # "standardDeviation" must stay camelCase here, unlike every other field name in this toolkit.
 .distribution_param_schema <- list(
-  EXACT       = list(required = c("value"),                      optional = c()),
-  UNIFORM     = list(required = c("low", "high"),                 optional = c()),
-  GAUSSIAN    = list(required = c("mean", "standardDeviation"),    optional = c("min", "max")),
-  EXPONENTIAL = list(required = c("mean"),                         optional = c()),
-  TRIANGULAR  = list(required = c("min", "mode", "max"),           optional = c())
+  EXACT       = list(required = c("value"), optional = c()),
+  UNIFORM     = list(required = c("low", "high"), optional = c()),
+  GAUSSIAN    = list(required = c("mean", "standardDeviation"), optional = c("min", "max")),
+  EXPONENTIAL = list(required = c("mean"), optional = c()),
+  TRIANGULAR  = list(required = c("min", "mode", "max"), optional = c())
 )
 
 #' Build a single "Component" value shape: Code, Range, Exact, DateInput, SampledData,
@@ -201,60 +215,62 @@
 #'   to which selector, or `vignette("component-reference")` for the per-shape table.
 #' @return A plain named list, ready to nest inside a state/logic/transition settings call.
 #' @examples
-#' create_component_settings("code", system = "SNOMED-CT", code = "38341003",
-#'                            display = "Hypertension")
+#' create_component_settings("code",
+#'   system = "SNOMED-CT", code = "38341003",
+#'   display = "Hypertension"
+#' )
 #'
 #' create_component_settings("distribution", kind = "UNIFORM", low = 1, high = 5)
 #' @export
 create_component_settings <- function(component,
-                                       attributes = NULL,
-                                       chart = NULL,
-                                       code = NULL,
-                                       content_type = NULL,
-                                       creation = NULL,
-                                       data = NULL,
-                                       day = NULL,
-                                       decimal_format = NULL,
-                                       decimals = NULL,
-                                       display = NULL,
-                                       duration = NULL,
-                                       factor = NULL,
-                                       frames = NULL,
-                                       from = NULL,
-                                       from_exp = NULL,
-                                       from_list = NULL,
-                                       height = NULL,
-                                       high = NULL,
-                                       hour = NULL,
-                                       kind = NULL,
-                                       language = NULL,
-                                       low = NULL,
-                                       lower_limit = NULL,
-                                       max = NULL,
-                                       mean = NULL,
-                                       millisecond = NULL,
-                                       min = NULL,
-                                       minute = NULL,
-                                       mode = NULL,
-                                       month = NULL,
-                                       origin_value = NULL,
-                                       pages = NULL,
-                                       quantity = NULL,
-                                       round = NULL,
-                                       second = NULL,
-                                       standardDeviation = NULL,
-                                       system = NULL,
-                                       title = NULL,
-                                       to = NULL,
-                                       type = NULL,
-                                       unit = NULL,
-                                       upper_limit = NULL,
-                                       url = NULL,
-                                       value = NULL,
-                                       variance = NULL,
-                                       vital_sign = NULL,
-                                       width = NULL,
-                                       year = NULL) {
+                                      attributes = NULL,
+                                      chart = NULL,
+                                      code = NULL,
+                                      content_type = NULL,
+                                      creation = NULL,
+                                      data = NULL,
+                                      day = NULL,
+                                      decimal_format = NULL,
+                                      decimals = NULL,
+                                      display = NULL,
+                                      duration = NULL,
+                                      factor = NULL,
+                                      frames = NULL,
+                                      from = NULL,
+                                      from_exp = NULL,
+                                      from_list = NULL,
+                                      height = NULL,
+                                      high = NULL,
+                                      hour = NULL,
+                                      kind = NULL,
+                                      language = NULL,
+                                      low = NULL,
+                                      lower_limit = NULL,
+                                      max = NULL,
+                                      mean = NULL,
+                                      millisecond = NULL,
+                                      min = NULL,
+                                      minute = NULL,
+                                      mode = NULL,
+                                      month = NULL,
+                                      origin_value = NULL,
+                                      pages = NULL,
+                                      quantity = NULL,
+                                      round = NULL,
+                                      second = NULL,
+                                      standardDeviation = NULL,
+                                      system = NULL,
+                                      title = NULL,
+                                      to = NULL,
+                                      type = NULL,
+                                      unit = NULL,
+                                      upper_limit = NULL,
+                                      url = NULL,
+                                      value = NULL,
+                                      variance = NULL,
+                                      vital_sign = NULL,
+                                      width = NULL,
+                                      year = NULL) {
   fields <- list(
     attributes = attributes,
     chart = chart,
@@ -309,8 +325,10 @@ create_component_settings <- function(component,
 
   if (identical(component, "distribution")) {
     if (is.null(fields$kind) || !fields$kind %in% names(.distribution_param_schema)) {
-      stop(sprintf("component 'distribution': kind must be one of: %s",
-                   paste(names(.distribution_param_schema), collapse = ", ")))
+      stop(sprintf(
+        "component 'distribution': kind must be one of: %s",
+        paste(names(.distribution_param_schema), collapse = ", ")
+      ))
     }
     kind <- fields$kind
     round <- fields$round

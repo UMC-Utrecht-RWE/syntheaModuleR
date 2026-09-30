@@ -40,13 +40,17 @@ library(syntheaModuleR)
 direct <- function(to) create_transition_settings("direct", to = to)
 
 diabetes_code <- create_component_settings("code",
-  system = "SNOMED-CT", code = "44054006", display = "Diabetes mellitus type 2 (disorder)")
+  system = "SNOMED-CT", code = "44054006", display = "Diabetes mellitus type 2 (disorder)"
+)
 metformin_code <- create_component_settings("code",
-  system = "RxNorm", code = "860975", display = "Metformin hydrochloride 500 MG Oral Tablet")
+  system = "RxNorm", code = "860975", display = "Metformin hydrochloride 500 MG Oral Tablet"
+)
 sulfonylurea_code <- create_component_settings("code",
-  system = "RxNorm", code = "310488", display = "Glipizide 5 MG Oral Tablet")
+  system = "RxNorm", code = "310488", display = "Glipizide 5 MG Oral Tablet"
+)
 third_agent_code <- create_component_settings("code",
-  system = "RxNorm", code = "1545653", display = "Empagliflozin 25 MG Oral Tablet")
+  system = "RxNorm", code = "1545653", display = "Empagliflozin 25 MG Oral Tablet"
+)
 ```
 
 `direct()` is the same one-line helper `example_trial_emulation.R` uses to cut down on repeating
@@ -62,17 +66,16 @@ of building incrementally is that every step along the way is something you coul
 ```{r step1}
 states_v1 <- list(
   Initial = create_state_settings("Initial", transition = direct("Diabetes Onset")),
-
   "Diabetes Onset" = create_state_settings("ConditionOnset",
     codes = list(diabetes_code), target_encounter = "Diagnosis Encounter",
-    transition = direct("Diagnosis Encounter")),
-
+    transition = direct("Diagnosis Encounter")
+  ),
   "Diagnosis Encounter" = create_state_settings("Encounter",
-    wellness = TRUE, transition = direct("End Diagnosis Encounter")),
-
+    wellness = TRUE, transition = direct("End Diagnosis Encounter")
+  ),
   "End Diagnosis Encounter" = create_state_settings("EncounterEnd",
-    transition = direct("Terminal")),
-
+    transition = direct("Terminal")
+  ),
   Terminal = create_state_settings("Terminal")
 )
 
@@ -94,29 +97,36 @@ generated data) can tell which path a given patient took.
 states_v2 <- states_v1
 
 states_v2[["End Diagnosis Encounter"]] <- create_state_settings("EncounterEnd",
-  transition = direct("First-Line Treatment Choice"))
+  transition = direct("First-Line Treatment Choice")
+)
 
 states_v2[["First-Line Treatment Choice"]] <- create_state_settings("Simple",
   transition = create_transition_settings("distributed", options = list(
     list(transition = "Start Metformin", distribution = 0.5),
     list(transition = "Start Sulfonylurea", distribution = 0.3),
     list(transition = "No Medication", distribution = 0.2)
-  )))
+  ))
+)
 
 states_v2[["Start Metformin"]] <- create_state_settings("MedicationOrder",
   codes = list(metformin_code), reason = "Diabetes Onset", chronic = TRUE,
-  transition = direct("Tag Metformin Regimen"))
+  transition = direct("Tag Metformin Regimen")
+)
 states_v2[["Tag Metformin Regimen"]] <- create_state_settings("SetAttribute",
-  attribute = "diabetes_regimen", value = "metformin", transition = direct("Terminal"))
+  attribute = "diabetes_regimen", value = "metformin", transition = direct("Terminal")
+)
 
 states_v2[["Start Sulfonylurea"]] <- create_state_settings("MedicationOrder",
   codes = list(sulfonylurea_code), reason = "Diabetes Onset", chronic = TRUE,
-  transition = direct("Tag Sulfonylurea Regimen"))
+  transition = direct("Tag Sulfonylurea Regimen")
+)
 states_v2[["Tag Sulfonylurea Regimen"]] <- create_state_settings("SetAttribute",
-  attribute = "diabetes_regimen", value = "sulfonylurea", transition = direct("Terminal"))
+  attribute = "diabetes_regimen", value = "sulfonylurea", transition = direct("Terminal")
+)
 
 states_v2[["No Medication"]] <- create_state_settings("SetAttribute",
-  attribute = "diabetes_regimen", value = "none", transition = direct("Terminal"))
+  attribute = "diabetes_regimen", value = "none", transition = direct("Terminal")
+)
 
 cat(build_module(name = "Cohort Building Vignette", states = states_v2))
 ```
@@ -139,11 +149,13 @@ step 2 are untouched; they still route straight to `Terminal`.
 states_v3 <- states_v2
 
 states_v3[["Tag Metformin Regimen"]] <- create_state_settings("SetAttribute",
-  attribute = "diabetes_regimen", value = "metformin", transition = direct("Treatment Review Delay"))
+  attribute = "diabetes_regimen", value = "metformin", transition = direct("Treatment Review Delay")
+)
 
 states_v3[["Treatment Review Delay"]] <- create_state_settings("Delay",
   range = create_component_settings("range", low = 6, high = 18, unit = "months"),
-  transition = direct("Metformin Switch Check"))
+  transition = direct("Metformin Switch Check")
+)
 
 states_v3[["Metformin Switch Check"]] <- create_state_settings("Simple",
   transition = create_transition_settings("distributed", options = list(
@@ -151,28 +163,36 @@ states_v3[["Metformin Switch Check"]] <- create_state_settings("Simple",
     list(transition = "Switch To Sulfonylurea", distribution = 0.15),
     list(transition = "Switch To Third Agent", distribution = 0.15),
     list(transition = "Discontinue Metformin", distribution = 0.10)
-  )))
+  ))
+)
 
 states_v3[["Continue Metformin"]] <- create_state_settings("Simple", transition = direct("Terminal"))
 
 states_v3[["Switch To Sulfonylurea"]] <- create_state_settings("MedicationEnd",
-  medication_order = "Start Metformin", transition = direct("Start Switch Sulfonylurea"))
+  medication_order = "Start Metformin", transition = direct("Start Switch Sulfonylurea")
+)
 states_v3[["Start Switch Sulfonylurea"]] <- create_state_settings("MedicationOrder",
   codes = list(sulfonylurea_code), reason = "Diabetes Onset", chronic = TRUE,
-  transition = direct("Tag Switched Regimen (Sulfonylurea)"))
+  transition = direct("Tag Switched Regimen (Sulfonylurea)")
+)
 states_v3[["Tag Switched Regimen (Sulfonylurea)"]] <- create_state_settings("SetAttribute",
-  attribute = "diabetes_regimen", value = "sulfonylurea (switched)", transition = direct("Terminal"))
+  attribute = "diabetes_regimen", value = "sulfonylurea (switched)", transition = direct("Terminal")
+)
 
 states_v3[["Switch To Third Agent"]] <- create_state_settings("MedicationEnd",
-  medication_order = "Start Metformin", transition = direct("Start Third Agent"))
+  medication_order = "Start Metformin", transition = direct("Start Third Agent")
+)
 states_v3[["Start Third Agent"]] <- create_state_settings("MedicationOrder",
   codes = list(third_agent_code), reason = "Diabetes Onset", chronic = TRUE,
-  transition = direct("Tag Switched Regimen (Other)"))
+  transition = direct("Tag Switched Regimen (Other)")
+)
 states_v3[["Tag Switched Regimen (Other)"]] <- create_state_settings("SetAttribute",
-  attribute = "diabetes_regimen", value = "other", transition = direct("Terminal"))
+  attribute = "diabetes_regimen", value = "other", transition = direct("Terminal")
+)
 
 states_v3[["Discontinue Metformin"]] <- create_state_settings("MedicationEnd",
-  medication_order = "Start Metformin", transition = direct("Terminal"))
+  medication_order = "Start Metformin", transition = direct("Terminal")
+)
 
 cat(build_module(name = "Cohort Building Vignette", states = states_v3))
 ```
@@ -221,17 +241,22 @@ on_any_diabetes_medication <- create_logic_settings("Or", conditions = list(
 states_v4[["Classify Treatment Status"]] <- create_state_settings("Simple",
   transition = create_transition_settings("conditional", options = list(
     list(condition = on_any_diabetes_medication, transition = "Treated Cohort"),
-    list(transition = "Untreated Cohort")  # condition omitted = the else branch
-  )))
+    list(transition = "Untreated Cohort") # condition omitted = the else branch
+  ))
+)
 states_v4[["Treated Cohort"]] <- create_state_settings("SetAttribute",
-  attribute = "diabetes_cohort", value = "treated", transition = direct("Terminal"))
+  attribute = "diabetes_cohort", value = "treated", transition = direct("Terminal")
+)
 states_v4[["Untreated Cohort"]] <- create_state_settings("SetAttribute",
-  attribute = "diabetes_cohort", value = "untreated", transition = direct("Terminal"))
+  attribute = "diabetes_cohort", value = "untreated", transition = direct("Terminal")
+)
 
 # Route every leaf that previously went straight to Terminal through classification first.
-for (leaf in c("Tag Sulfonylurea Regimen", "No Medication", "Continue Metformin",
-                "Tag Switched Regimen (Sulfonylurea)", "Tag Switched Regimen (Other)",
-                "Discontinue Metformin")) {
+for (leaf in c(
+  "Tag Sulfonylurea Regimen", "No Medication", "Continue Metformin",
+  "Tag Switched Regimen (Sulfonylurea)", "Tag Switched Regimen (Other)",
+  "Discontinue Metformin"
+)) {
   states_v4[[leaf]]$direct_transition <- "Classify Treatment Status"
 }
 
@@ -270,7 +295,7 @@ looks like:
 
 ```{r validate-broken, error = TRUE}
 broken_states <- states_v4
-broken_states[["Discontinue Metformin"]]$medication_order <- "Start Metfromin"  # typo
+broken_states[["Discontinue Metformin"]]$medication_order <- "Start Metfromin" # typo
 validate_module(list(states = broken_states))
 ```
 
@@ -283,12 +308,16 @@ population mix looks like what you intended -- without generating a single patie
 
 ```{r sanity-check}
 first_line <- c(metformin = 0.5, sulfonylurea = 0.3, none = 0.2)
-metformin_outcome <- c(continues = 0.60, switches_sulfonylurea = 0.15,
-                        switches_other = 0.15, discontinues = 0.10)
+metformin_outcome <- c(
+  continues = 0.60, switches_sulfonylurea = 0.15,
+  switches_other = 0.15, discontinues = 0.10
+)
 
 data.frame(
-  final_regimen = c("metformin", "sulfonylurea (first-line)", "sulfonylurea (switched)",
-                     "other (switched)", "discontinued (no replacement)", "none (first-line)"),
+  final_regimen = c(
+    "metformin", "sulfonylurea (first-line)", "sulfonylurea (switched)",
+    "other (switched)", "discontinued (no replacement)", "none (first-line)"
+  ),
   expected_share = c(
     first_line["metformin"] * metformin_outcome["continues"],
     first_line["sulfonylurea"],

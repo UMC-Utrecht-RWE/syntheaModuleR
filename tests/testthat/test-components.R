@@ -2,12 +2,16 @@
 # (.validate_settings / .apply_array_rule / .build_settings) every layer reuses.
 
 test_that("code component requires system, code, display", {
-  x <- create_component_settings("code", system = "SNOMED-CT", code = "38341003",
-                                  display = "Hypertension")
+  x <- create_component_settings("code",
+    system = "SNOMED-CT", code = "38341003",
+    display = "Hypertension"
+  )
   expect_mapequal(x, list(system = "SNOMED-CT", code = "38341003", display = "Hypertension"))
 
-  expect_error(create_component_settings("code", system = "SNOMED-CT"),
-               "missing required field")
+  expect_error(
+    create_component_settings("code", system = "SNOMED-CT"),
+    "missing required field"
+  )
 })
 
 test_that("code component rejects a field valid elsewhere but not allowed on 'code'", {
@@ -49,21 +53,29 @@ test_that("exact component: required quantity, optional unit", {
 test_that("date_input component: required year/month/day, optional time parts", {
   x <- create_component_settings("date_input", year = 2020, month = 1, day = 15)
   expect_equal(x$year, 2020)
-  expect_error(create_component_settings("date_input", year = 2020, month = 1),
-               "missing required field")
+  expect_error(
+    create_component_settings("date_input", year = 2020, month = 1),
+    "missing required field"
+  )
 })
 
 test_that("sampled_data component: required origin_value/attributes (array)", {
-  x <- create_component_settings("sampled_data", origin_value = 0,
-                                  attributes = list("a", "b"))
+  x <- create_component_settings("sampled_data",
+    origin_value = 0,
+    attributes = list("a", "b")
+  )
   expect_equal(x$attributes, list("a", "b"))
-  expect_error(create_component_settings("sampled_data", attributes = list("a")),
-               "missing required field")
+  expect_error(
+    create_component_settings("sampled_data", attributes = list("a")),
+    "missing required field"
+  )
 })
 
 test_that("attachment component: exactly one of chart/url/data", {
-  expect_error(create_component_settings("attachment"),
-               "exactly one of")
+  expect_error(
+    create_component_settings("attachment"),
+    "exactly one of"
+  )
   expect_error(
     create_component_settings("attachment", url = "http://x", data = "abc"),
     "exactly one of"
@@ -93,13 +105,17 @@ test_that("distribution UNIFORM kind requires low/high", {
   x <- create_component_settings("distribution", kind = "UNIFORM", low = 1, high = 5)
   expect_equal(x$kind, "UNIFORM")
   expect_mapequal(x$parameters, list(low = 1, high = 5))
-  expect_error(create_component_settings("distribution", kind = "UNIFORM", low = 1),
-               "missing required field")
+  expect_error(
+    create_component_settings("distribution", kind = "UNIFORM", low = 1),
+    "missing required field"
+  )
 })
 
 test_that("distribution GAUSSIAN kind keeps standardDeviation camelCase and accepts min/max", {
-  x <- create_component_settings("distribution", kind = "GAUSSIAN", mean = 10,
-                                  standardDeviation = 2, min = 0, max = 20)
+  x <- create_component_settings("distribution",
+    kind = "GAUSSIAN", mean = 10,
+    standardDeviation = 2, min = 0, max = 20
+  )
   expect_mapequal(x$parameters, list(mean = 10, standardDeviation = 2, min = 0, max = 20))
   expect_true("standardDeviation" %in% names(x$parameters))
 
@@ -117,8 +133,10 @@ test_that("distribution EXPONENTIAL kind requires mean only", {
 test_that("distribution TRIANGULAR kind requires min/mode/max", {
   x <- create_component_settings("distribution", kind = "TRIANGULAR", min = 1, mode = 2, max = 3)
   expect_mapequal(x$parameters, list(min = 1, mode = 2, max = 3))
-  expect_error(create_component_settings("distribution", kind = "TRIANGULAR", min = 1, mode = 2),
-               "missing required field")
+  expect_error(
+    create_component_settings("distribution", kind = "TRIANGULAR", min = 1, mode = 2),
+    "missing required field"
+  )
 })
 
 test_that("distribution: round is optional and top-level, not in parameters", {
@@ -128,10 +146,14 @@ test_that("distribution: round is optional and top-level, not in parameters", {
 })
 
 test_that("distribution: invalid kind errors", {
-  expect_error(create_component_settings("distribution", kind = "BOGUS", value = 1),
-               "kind must be one of")
-  expect_error(create_component_settings("distribution", value = 1),
-               "kind must be one of")
+  expect_error(
+    create_component_settings("distribution", kind = "BOGUS", value = 1),
+    "kind must be one of"
+  )
+  expect_error(
+    create_component_settings("distribution", value = 1),
+    "kind must be one of"
+  )
 })
 
 test_that("distribution: unknown parameter for a kind errors", {
@@ -143,23 +165,31 @@ test_that("distribution: unknown parameter for a kind errors", {
 
 # Internal helpers, exercised directly (not exported, but the toolkit's shared foundation).
 test_that(".validate_settings enforces required/optional/unknown/one_of", {
-  entry <- list(required = "a", optional = "b",
-                one_of = list(list(fields = c("c", "d"), required = TRUE)))
+  entry <- list(
+    required = "a", optional = "b",
+    one_of = list(list(fields = c("c", "d"), required = TRUE))
+  )
   expect_true(syntheaModuleR:::.validate_settings(entry, list(a = 1, c = 1), "x"))
   expect_error(syntheaModuleR:::.validate_settings(entry, list(b = 1), "x"), "missing required")
   expect_error(syntheaModuleR:::.validate_settings(entry, list(a = 1, z = 1), "x"), "unknown field")
   expect_error(syntheaModuleR:::.validate_settings(entry, list(a = 1), "x"), "exactly one of")
-  expect_error(syntheaModuleR:::.validate_settings(entry, list(a = 1, c = 1, d = 1), "x"),
-               "exactly one of")
+  expect_error(
+    syntheaModuleR:::.validate_settings(entry, list(a = 1, c = 1, d = 1), "x"),
+    "exactly one of"
+  )
 })
 
 test_that(".validate_settings one_of required = FALSE allows zero or one, not more", {
-  entry <- list(required = c(), optional = c("c", "d"),
-                one_of = list(list(fields = c("c", "d"), required = FALSE)))
+  entry <- list(
+    required = c(), optional = c("c", "d"),
+    one_of = list(list(fields = c("c", "d"), required = FALSE))
+  )
   expect_true(syntheaModuleR:::.validate_settings(entry, list(), "x"))
   expect_true(syntheaModuleR:::.validate_settings(entry, list(c = 1), "x"))
-  expect_error(syntheaModuleR:::.validate_settings(entry, list(c = 1, d = 1), "x"),
-               "at most one of")
+  expect_error(
+    syntheaModuleR:::.validate_settings(entry, list(c = 1, d = 1), "x"),
+    "at most one of"
+  )
 })
 
 test_that(".apply_array_rule requires a list, rejects a bare named-list item, unwraps names", {
@@ -179,11 +209,15 @@ test_that(".apply_array_rule requires a list, rejects a bare named-list item, un
 
 test_that("the array rule is enforced end-to-end through create_state_settings", {
   expect_error(
-    create_state_settings("ConditionOnset", codes = a_code(),
-                           transition = create_transition_settings("direct", to = "Terminal")),
+    create_state_settings("ConditionOnset",
+      codes = a_code(),
+      transition = create_transition_settings("direct", to = "Terminal")
+    ),
     "looks like a single item"
   )
-  ok <- create_state_settings("ConditionOnset", codes = list(a_code()),
-                               transition = create_transition_settings("direct", to = "Terminal"))
+  ok <- create_state_settings("ConditionOnset",
+    codes = list(a_code()),
+    transition = create_transition_settings("direct", to = "Terminal")
+  )
   expect_length(ok$codes, 1)
 })

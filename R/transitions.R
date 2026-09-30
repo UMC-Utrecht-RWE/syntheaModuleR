@@ -44,12 +44,12 @@
 #' ))
 #' @export
 create_transition_settings <- function(kind,
-                                        to = NULL,
-                                        options = NULL,
-                                        lookup_table_name = NULL,
-                                        ambulatory = NULL,
-                                        telemedicine = NULL,
-                                        emergency = NULL) {
+                                       to = NULL,
+                                       options = NULL,
+                                       lookup_table_name = NULL,
+                                       ambulatory = NULL,
+                                       telemedicine = NULL,
+                                       emergency = NULL) {
   fields <- list(
     to = to,
     options = options,
@@ -62,15 +62,16 @@ create_transition_settings <- function(kind,
 
   entry <- .transition_schema[[kind]]
   if (is.null(entry)) {
-    stop(sprintf("transition: unknown kind '%s'. Valid kinds: %s",
-                 kind, paste(names(.transition_schema), collapse = ", ")))
+    stop(sprintf(
+      "transition: unknown kind '%s'. Valid kinds: %s",
+      kind, paste(names(.transition_schema), collapse = ", ")
+    ))
   }
   .validate_settings(entry, fields, sprintf("transition '%s'", kind))
   fields <- .apply_array_rule(entry, fields)
 
   switch(kind,
     direct = list(direct_transition = fields$to),
-
     distributed = {
       opts <- lapply(fields$options, function(o) {
         if (is.null(o$transition)) stop("transition 'distributed': each option needs 'transition'")
@@ -79,16 +80,17 @@ create_transition_settings <- function(kind,
       })
       list(distributed_transition = unname(opts))
     },
-
     conditional = {
       opts <- lapply(fields$options, function(o) {
         if (is.null(o$transition)) stop("transition 'conditional': each option needs 'transition'")
-        if (is.null(o$condition)) list(transition = o$transition)
-        else list(condition = o$condition, transition = o$transition)
+        if (is.null(o$condition)) {
+          list(transition = o$transition)
+        } else {
+          list(condition = o$condition, transition = o$transition)
+        }
       })
       list(conditional_transition = unname(opts))
     },
-
     complex = {
       opts <- lapply(fields$options, function(o) {
         has_t <- !is.null(o$transition)
@@ -103,18 +105,18 @@ create_transition_settings <- function(kind,
       })
       list(complex_transition = unname(opts))
     },
-
     lookup_table = {
       opts <- lapply(fields$options, function(o) {
         if (is.null(o$transition) || is.null(o$default_probability)) {
           stop("transition 'lookup_table': each option needs 'transition' and 'default_probability'")
         }
-        list(transition = o$transition, lookup_table_name = fields$lookup_table_name,
-             default_probability = o$default_probability)
+        list(
+          transition = o$transition, lookup_table_name = fields$lookup_table_name,
+          default_probability = o$default_probability
+        )
       })
       list(lookup_table_transition = unname(opts))
     },
-
     type_of_care = list(type_of_care_transition = list(
       ambulatory = fields$ambulatory, telemedicine = fields$telemedicine, emergency = fields$emergency
     ))

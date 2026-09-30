@@ -32,7 +32,8 @@ in one call:
 
 ```{r recipe}
 condition_code <- create_component_settings("code",
-  system = "SNOMED-CT", code = "444316003", display = "Seasonal allergic rhinitis (disorder)")
+  system = "SNOMED-CT", code = "444316003", display = "Seasonal allergic rhinitis (disorder)"
+)
 
 recipe_module <- build_disease_module(
   name = "Recipe vs. Compose Example",
@@ -88,31 +89,31 @@ every state and transition the recipe generated for you:
 composed_states <- list(
   "Onset Delay" = create_state_settings("Delay",
     range = create_component_settings("range", low = 1, high = 4, unit = "weeks"),
-    transition = create_transition_settings("direct", to = "Condition Onset")),
-
+    transition = create_transition_settings("direct", to = "Condition Onset")
+  ),
   "Condition Onset" = create_state_settings("ConditionOnset",
     codes = list(condition_code),
     target_encounter = "Diagnosis Encounter",
-    transition = create_transition_settings("direct", to = "Diagnosis Encounter")),
-
+    transition = create_transition_settings("direct", to = "Diagnosis Encounter")
+  ),
   "Diagnosis Encounter" = create_state_settings("Encounter",
     wellness = TRUE,
-    transition = create_transition_settings("direct", to = "End Encounter")),
-
+    transition = create_transition_settings("direct", to = "End Encounter")
+  ),
   "Condition Resolves Delay" = create_state_settings("Delay",
     range = create_component_settings("range", low = 2, high = 6, unit = "weeks"),
-    transition = create_transition_settings("direct", to = "Condition Resolves")),
-
+    transition = create_transition_settings("direct", to = "Condition Resolves")
+  ),
   "Condition Resolves" = create_state_settings("ConditionEnd",
     condition_onset = "Condition Onset",
-    transition = create_transition_settings("direct", to = "Terminal")),
-
+    transition = create_transition_settings("direct", to = "Terminal")
+  ),
   "End Encounter" = create_state_settings("EncounterEnd",
-    transition = create_transition_settings("direct", to = "Condition Resolves Delay")),
-
+    transition = create_transition_settings("direct", to = "Condition Resolves Delay")
+  ),
   Initial = create_state_settings("Initial",
-    transition = create_transition_settings("direct", to = "Onset Delay")),
-
+    transition = create_transition_settings("direct", to = "Onset Delay")
+  ),
   Terminal = create_state_settings("Terminal")
 )
 
@@ -173,12 +174,15 @@ more state -- e.g. prescribing an antihistamine during the encounter, something
 extended_states <- composed_states
 extended_states[["Diagnosis Encounter"]] <- create_state_settings("Encounter",
   wellness = TRUE,
-  transition = create_transition_settings("direct", to = "Prescribe Antihistamine"))
+  transition = create_transition_settings("direct", to = "Prescribe Antihistamine")
+)
 extended_states[["Prescribe Antihistamine"]] <- create_state_settings("MedicationOrder",
   codes = list(create_component_settings("code",
-    system = "RxNorm", code = "997219", display = "Cetirizine hydrochloride 10 MG Oral Tablet")),
+    system = "RxNorm", code = "997219", display = "Cetirizine hydrochloride 10 MG Oral Tablet"
+  )),
   reason = "Condition Onset",
-  transition = create_transition_settings("direct", to = "End Encounter"))
+  transition = create_transition_settings("direct", to = "End Encounter")
+)
 
 extended_module <- build_module(name = "Extended Example", states = extended_states)
 ```

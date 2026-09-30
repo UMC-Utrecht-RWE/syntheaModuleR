@@ -22,8 +22,10 @@ test_that("chain of three fragments wires the middle links too", {
 })
 
 test_that("chain skips NULL fragments (an omitted create_population(), etc.)", {
-  frag <- chain(NULL, create_tag("A", attribute = "x", value = 1), NULL,
-                create_tag("B", attribute = "x", value = 2))
+  frag <- chain(
+    NULL, create_tag("A", attribute = "x", value = 1), NULL,
+    create_tag("B", attribute = "x", value = 2)
+  )
   expect_equal(frag$entry, "A")
   expect_equal(frag$exit, "B")
   expect_equal(frag$states$A$direct_transition, "B")
@@ -57,7 +59,8 @@ test_that("pathways builds a distributed choice state and a join state", {
       metformin = create_medication("Metformin", another_code(), condition = "Diabetes"),
       none = NULL
     ),
-    shares = c(metformin = 0.8, none = 0.2))
+    shares = c(metformin = 0.8, none = 0.2)
+  )
 
   expect_equal(frag$entry, "Treatment Choice")
   expect_equal(frag$exit, "Treatment Join")
@@ -95,7 +98,8 @@ test_that("pathways routes a terminal_options branch straight to Terminal, not t
   frag <- pathways("X",
     options = list(dies = create_death(), survives = NULL),
     shares = c(dies = 0.1, survives = 0.9),
-    terminal_options = "dies")
+    terminal_options = "dies"
+  )
   expect_equal(frag$states$Death$direct_transition, "Terminal")
 })
 
@@ -103,7 +107,8 @@ test_that("pathways' attribute argument auto-tags each option before the join", 
   frag <- pathways("X",
     options = list(a = NULL, b = NULL),
     shares = c(a = 0.5, b = 0.5),
-    attribute = "arm")
+    attribute = "arm"
+  )
   tag_a <- frag$states[["X Tag a"]]
   expect_equal(tag_a$type, "SetAttribute")
   expect_equal(tag_a$attribute, "arm")
@@ -123,11 +128,13 @@ test_that("classify requires exactly 2 named options", {
 
 test_that("classify routes the first option when true, the second as the else fallback", {
   cond <- create_logic_settings("ActiveMedication", codes = list(another_code()))
-  frag <- classify("Treatment Status", condition = cond,
+  frag <- classify("Treatment Status",
+    condition = cond,
     options = list(
       treated = create_tag("Treated", attribute = "cohort", value = "treated"),
       untreated = create_tag("Untreated", attribute = "cohort", value = "untreated")
-    ))
+    )
+  )
   expect_equal(frag$entry, "Treatment Status Check")
   expect_equal(frag$exit, "Treatment Status Join")
   check <- frag$states[["Treatment Status Check"]]
@@ -142,16 +149,20 @@ test_that("classify routes the first option when true, the second as the else fa
 
 test_that("classify supports NULL options and terminal_options like pathways", {
   cond <- create_logic_settings("True")
-  frag <- classify("X", cond, options = list(dies = create_death(), lives = NULL),
-                    terminal_options = "dies")
+  frag <- classify("X", cond,
+    options = list(dies = create_death(), lives = NULL),
+    terminal_options = "dies"
+  )
   expect_equal(frag$states$Death$direct_transition, "Terminal")
   opts <- frag$states[["X Check"]]$conditional_transition
   expect_equal(opts[[2]]$transition, "X Join")
 })
 
 test_that("repeat_until wires the loop back to body$entry until the condition passes", {
-  body <- chain(create_delay(90, 90, "days"),
-                create_counter("readings", action = "increment", label = "Count"))
+  body <- chain(
+    create_delay(90, 90, "days"),
+    create_counter("readings", action = "increment", label = "Count")
+  )
   until <- create_logic_settings("Attribute", attribute = "readings", operator = ">=", value = 2)
   frag <- repeat_until(body, until = until)
 
@@ -186,11 +197,13 @@ test_that("a pathways()-based cohort with a death branch validates end-to-end", 
         metformin = create_medication("Metformin", another_code(), condition = "Diabetes"),
         none = NULL
       ),
-      shares = c(metformin = 0.8, none = 0.2))) |>
+      shares = c(metformin = 0.8, none = 0.2)
+    )) |>
     add(pathways("Outcome",
       options = list(dies = create_death(condition = "Diabetes"), survives = NULL),
       shares = c(dies = 0.05, survives = 0.95),
-      terminal_options = "dies"))
+      terminal_options = "dies"
+    ))
 
   m <- build_cohort_module("Diabetes Cohort", frag, as_json = FALSE)
   expect_true(validate_module(m))
@@ -199,10 +212,14 @@ test_that("a pathways()-based cohort with a death branch validates end-to-end", 
 })
 
 test_that("a repeat_until() loop composed into a full module validates", {
-  body <- chain(create_delay(90, 90, "days"),
-                create_counter("readings", action = "increment", label = "Count Reading"))
-  loop <- repeat_until(body, until = create_logic_settings("Attribute", attribute = "readings",
-                                                             operator = ">=", value = 3))
+  body <- chain(
+    create_delay(90, 90, "days"),
+    create_counter("readings", action = "increment", label = "Count Reading")
+  )
+  loop <- repeat_until(body, until = create_logic_settings("Attribute",
+    attribute = "readings",
+    operator = ">=", value = 3
+  ))
   m <- build_cohort_module("Counting Loop", loop, as_json = FALSE)
   expect_true(validate_module(m))
   expect_equal(m$states[["Loop Continue"]]$direct_transition, "Terminal")
@@ -210,11 +227,13 @@ test_that("a repeat_until() loop composed into a full module validates", {
 
 test_that("a classify()-based branch composed into a full module validates", {
   cond <- create_logic_settings("ActiveMedication", codes = list(another_code()))
-  frag <- classify("Treatment Status", condition = cond,
+  frag <- classify("Treatment Status",
+    condition = cond,
     options = list(
       treated = create_tag("Treated", attribute = "cohort", value = "treated"),
       untreated = create_tag("Untreated", attribute = "cohort", value = "untreated")
-    ))
+    )
+  )
   m <- build_cohort_module("Classified Cohort", frag, as_json = FALSE)
   expect_true(validate_module(m))
 })

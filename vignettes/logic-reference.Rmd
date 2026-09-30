@@ -76,7 +76,8 @@ create_logic_settings("VitalSign", vital_sign = "Blood Pressure", operator = ">"
 
 ```{r observation}
 height_code <- create_component_settings("code",
-  system = "LOINC", code = "8302-2", display = "Body height")
+  system = "LOINC", code = "8302-2", display = "Body height"
+)
 
 create_logic_settings("Observation", codes = list(height_code), operator = ">", value = 200)
 ```
@@ -92,11 +93,14 @@ siblings share the exact same shape:
 
 ```{r active-clinical-state}
 allergy_code <- create_component_settings("code",
-  system = "RxNorm", code = "7980", display = "Penicillin")
+  system = "RxNorm", code = "7980", display = "Penicillin"
+)
 medication_code <- create_component_settings("code",
-  system = "RxNorm", code = "313782", display = "Acetaminophen 325 MG Oral Tablet")
+  system = "RxNorm", code = "313782", display = "Acetaminophen 325 MG Oral Tablet"
+)
 careplan_code <- create_component_settings("code",
-  system = "SNOMED-CT", code = "698360004", display = "Diabetes self management plan")
+  system = "SNOMED-CT", code = "698360004", display = "Diabetes self management plan"
+)
 
 create_logic_settings("ActiveAllergy", codes = list(allergy_code))
 create_logic_settings("ActiveMedication", codes = list(medication_code))

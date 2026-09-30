@@ -55,7 +55,8 @@ than one is present, which this package will silently let you do.
 ```{r value}
 create_state_settings("SetAttribute",
   attribute = "risk_score", value = 0,
-  transition = create_transition_settings("direct", to = "Next"))
+  transition = create_transition_settings("direct", to = "Next")
+)
 ```
 
 `value_code` assigns a `Code` component rather than a scalar -- useful for an attribute that
@@ -65,8 +66,10 @@ represents a coded concept, like a blood type:
 create_state_settings("SetAttribute",
   attribute = "blood_type",
   value_code = create_component_settings("code",
-    system = "SNOMED-CT", code = "112144000", display = "Blood group A Rh(D) positive"),
-  transition = create_transition_settings("direct", to = "Next"))
+    system = "SNOMED-CT", code = "112144000", display = "Blood group A Rh(D) positive"
+  ),
+  transition = create_transition_settings("direct", to = "Next")
+)
 ```
 
 `value_attribute` copies another attribute's current value:
@@ -74,7 +77,8 @@ create_state_settings("SetAttribute",
 ```{r value_attribute}
 create_state_settings("SetAttribute",
   attribute = "risk_score_snapshot", value_attribute = "risk_score",
-  transition = create_transition_settings("direct", to = "Next"))
+  transition = create_transition_settings("direct", to = "Next")
+)
 ```
 
 `range` samples uniformly between `low` and `high` -- the same `range` component from
@@ -84,7 +88,8 @@ create_state_settings("SetAttribute",
 create_state_settings("SetAttribute",
   attribute = "risk_score",
   range = create_component_settings("range", low = 0, high = 100),
-  transition = create_transition_settings("direct", to = "Next"))
+  transition = create_transition_settings("direct", to = "Next")
+)
 ```
 
 `distribution` samples from any of the five `Distribution` kinds covered in
@@ -93,9 +98,12 @@ create_state_settings("SetAttribute",
 ```{r distribution}
 create_state_settings("SetAttribute",
   attribute = "risk_score",
-  distribution = create_component_settings("distribution", kind = "GAUSSIAN",
-    mean = 50, standardDeviation = 15, min = 0, max = 100),
-  transition = create_transition_settings("direct", to = "Next"))
+  distribution = create_component_settings("distribution",
+    kind = "GAUSSIAN",
+    mean = 50, standardDeviation = 15, min = 0, max = 100
+  ),
+  transition = create_transition_settings("direct", to = "Next")
+)
 ```
 
 `expression` evaluates a small formula string against the person's current attributes --
@@ -105,7 +113,8 @@ validates; it's passed through as a raw string:
 ```{r expression}
 create_state_settings("SetAttribute",
   attribute = "risk_score", expression = "#{risk_score} + 5",
-  transition = create_transition_settings("direct", to = "Next"))
+  transition = create_transition_settings("direct", to = "Next")
+)
 ```
 
 `series_data` (paired with the optional `period`) drives a time-varying attribute through a
@@ -124,9 +133,12 @@ the two fields you gave is now dead:
 conflicting <- create_state_settings("SetAttribute",
   attribute = "risk_score",
   range = create_component_settings("range", low = 0, high = 100),
-  distribution = create_component_settings("distribution", kind = "GAUSSIAN",
-    mean = 50, standardDeviation = 15),
-  transition = create_transition_settings("direct", to = "Next"))
+  distribution = create_component_settings("distribution",
+    kind = "GAUSSIAN",
+    mean = 50, standardDeviation = 15
+  ),
+  transition = create_transition_settings("direct", to = "Next")
+)
 names(conflicting)
 ```
 
@@ -142,24 +154,27 @@ toolkit.**
 ```{r worked-example}
 states <- list(
   Initial = create_state_settings("Initial",
-    transition = create_transition_settings("direct", to = "Set Baseline Risk")),
+    transition = create_transition_settings("direct", to = "Set Baseline Risk")
+  ),
 
   # 1. range: a random baseline value, sampled once.
   "Set Baseline Risk" = create_state_settings("SetAttribute",
     attribute = "risk_score",
     range = create_component_settings("range", low = 0, high = 50),
-    transition = create_transition_settings("direct", to = "Apply Risk Modifier")),
+    transition = create_transition_settings("direct", to = "Apply Risk Modifier")
+  ),
 
   # 2. expression: derive a new value from the attribute set in step 1.
   "Apply Risk Modifier" = create_state_settings("SetAttribute",
     attribute = "risk_score", expression = "#{risk_score} + 10",
-    transition = create_transition_settings("direct", to = "Snapshot Risk")),
+    transition = create_transition_settings("direct", to = "Snapshot Risk")
+  ),
 
   # 3. value_attribute: copy the derived value somewhere else, verbatim.
   "Snapshot Risk" = create_state_settings("SetAttribute",
     attribute = "risk_score_at_enrollment", value_attribute = "risk_score",
-    transition = create_transition_settings("direct", to = "Terminal")),
-
+    transition = create_transition_settings("direct", to = "Terminal")
+  ),
   Terminal = create_state_settings("Terminal")
 )
 

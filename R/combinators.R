@@ -32,7 +32,9 @@
 chain <- function(...) {
   fragments <- Filter(Negate(is.null), list(...))
   if (length(fragments) == 0) stop("chain(): at least one non-NULL fragment is required")
-  if (length(fragments) == 1) return(fragments[[1]])
+  if (length(fragments) == 1) {
+    return(fragments[[1]])
+  }
 
   states <- .merge_fragment_states(fragments)
   for (i in seq_len(length(fragments) - 1)) {
@@ -52,8 +54,10 @@ chain <- function(...) {
 #' @param nxt The fragment to append.
 #' @return A fragment, per `chain()`.
 #' @examples
-#' create_condition("Diabetes", create_component_settings("code", system = "SNOMED-CT",
-#'   code = "44054006", display = "Diabetes")) |>
+#' create_condition("Diabetes", create_component_settings("code",
+#'   system = "SNOMED-CT",
+#'   code = "44054006", display = "Diabetes"
+#' )) |>
 #'   add(create_tag("Diagnosed", attribute = "seen", value = TRUE))
 #' @export
 add <- function(fragment, nxt) {
@@ -77,15 +81,17 @@ add <- function(fragment, nxt) {
 #'   (tag state, if any, plus the option's own fragment states), `target` is where the choice/
 #'   check state should route this option to.
 .route_option <- function(option_name, fragment, combinator_name, attribute, terminal_options,
-                           join_label, states_so_far) {
+                          join_label, states_so_far) {
   is_terminal <- option_name %in% terminal_options
   after_tag <- if (is_terminal) "Terminal" else join_label
 
   new_states <- list()
   if (!is.null(attribute)) {
     tag_label <- paste0(combinator_name, " Tag ", option_name)
-    new_states[[tag_label]] <- create_state_settings("SetAttribute", attribute = attribute, value = option_name,
-      transition = create_transition_settings("direct", to = after_tag))
+    new_states[[tag_label]] <- create_state_settings("SetAttribute",
+      attribute = attribute, value = option_name,
+      transition = create_transition_settings("direct", to = after_tag)
+    )
     entry_target <- tag_label
   } else {
     entry_target <- after_tag
@@ -121,12 +127,18 @@ add <- function(fragment, nxt) {
 #' @return A fragment: `entry` = the choice state, `exit` = the join state.
 #' @examples
 #' pathways("First-Line Treatment",
-#'   options = list(metformin = create_medication("Metformin",
-#'                    create_component_settings("code", system = "RxNorm", code = "860975",
-#'                                               display = "Metformin"),
-#'                    condition = "Diabetes", duration = "long"),
-#'                  none = NULL),
-#'   shares = c(metformin = 0.8, none = 0.2))
+#'   options = list(
+#'     metformin = create_medication("Metformin",
+#'       create_component_settings("code",
+#'         system = "RxNorm", code = "860975",
+#'         display = "Metformin"
+#'       ),
+#'       condition = "Diabetes", duration = "long"
+#'     ),
+#'     none = NULL
+#'   ),
+#'   shares = c(metformin = 0.8, none = 0.2)
+#' )
 #' @export
 pathways <- function(name, options, shares, attribute = NULL, terminal_options = NULL) {
   opt_names <- names(options)
@@ -137,8 +149,10 @@ pathways <- function(name, options, shares, attribute = NULL, terminal_options =
     stop("pathways(): every name in `options` must have a matching entry in `shares`")
   }
   if (!is.null(terminal_options) && !all(terminal_options %in% opt_names)) {
-    stop(sprintf("pathways(): terminal_options not found in options: %s",
-                 paste(setdiff(terminal_options, opt_names), collapse = ", ")))
+    stop(sprintf(
+      "pathways(): terminal_options not found in options: %s",
+      paste(setdiff(terminal_options, opt_names), collapse = ", ")
+    ))
   }
 
   choice_label <- paste0(name, " Choice")
@@ -147,17 +161,23 @@ pathways <- function(name, options, shares, attribute = NULL, terminal_options =
   states <- list()
   choice_options <- list()
   for (opt_name in opt_names) {
-    routed <- .route_option(opt_name, options[[opt_name]], name, attribute, terminal_options,
-                             join_label, states)
+    routed <- .route_option(
+      opt_name, options[[opt_name]], name, attribute, terminal_options,
+      join_label, states
+    )
     states <- c(states, routed$states)
-    choice_options[[length(choice_options) + 1]] <- list(transition = routed$target,
-                                                           distribution = unname(shares[[opt_name]]))
+    choice_options[[length(choice_options) + 1]] <- list(
+      transition = routed$target,
+      distribution = unname(shares[[opt_name]])
+    )
   }
 
   states[[choice_label]] <- create_state_settings("Simple",
-    transition = create_transition_settings("distributed", options = choice_options))
+    transition = create_transition_settings("distributed", options = choice_options)
+  )
   states[[join_label]] <- create_state_settings("Simple",
-    transition = create_transition_settings("direct", to = "__PENDING__"))
+    transition = create_transition_settings("direct", to = "__PENDING__")
+  )
 
   list(states = states, entry = choice_label, exit = join_label)
 }
@@ -179,21 +199,32 @@ pathways <- function(name, options, shares, attribute = NULL, terminal_options =
 #' @return A fragment: `entry` = the check state, `exit` = the join state.
 #' @examples
 #' on_med <- create_logic_settings("ActiveMedication",
-#'   codes = list(create_component_settings("code", system = "RxNorm", code = "860975",
-#'                                           display = "Metformin")))
-#' classify("Treatment Status", condition = on_med,
-#'   options = list(treated = create_tag("Treated", attribute = "cohort", value = "treated"),
-#'                  untreated = create_tag("Untreated", attribute = "cohort", value = "untreated")))
+#'   codes = list(create_component_settings("code",
+#'     system = "RxNorm", code = "860975",
+#'     display = "Metformin"
+#'   ))
+#' )
+#' classify("Treatment Status",
+#'   condition = on_med,
+#'   options = list(
+#'     treated = create_tag("Treated", attribute = "cohort", value = "treated"),
+#'     untreated = create_tag("Untreated", attribute = "cohort", value = "untreated")
+#'   )
+#' )
 #' @export
 classify <- function(name, condition, options, attribute = NULL, terminal_options = NULL) {
   opt_names <- names(options)
   if (length(options) != 2 || is.null(opt_names) || any(!nzchar(opt_names))) {
-    stop("classify(): `options` must be a named list of exactly 2 entries -- the first is taken ",
-         "when `condition` is true, the second is the else fallback")
+    stop(
+      "classify(): `options` must be a named list of exactly 2 entries -- the first is taken ",
+      "when `condition` is true, the second is the else fallback"
+    )
   }
   if (!is.null(terminal_options) && !all(terminal_options %in% opt_names)) {
-    stop(sprintf("classify(): terminal_options not found in options: %s",
-                 paste(setdiff(terminal_options, opt_names), collapse = ", ")))
+    stop(sprintf(
+      "classify(): terminal_options not found in options: %s",
+      paste(setdiff(terminal_options, opt_names), collapse = ", ")
+    ))
   }
 
   check_label <- paste0(name, " Check")
@@ -205,14 +236,19 @@ classify <- function(name, condition, options, attribute = NULL, terminal_option
     opt_name <- opt_names[i]
     routed <- .route_option(opt_name, options[[i]], name, attribute, terminal_options, join_label, states)
     states <- c(states, routed$states)
-    cond_options[[i]] <- if (i == 1) list(condition = condition, transition = routed$target)
-                         else list(transition = routed$target)
+    cond_options[[i]] <- if (i == 1) {
+      list(condition = condition, transition = routed$target)
+    } else {
+      list(transition = routed$target)
+    }
   }
 
   states[[check_label]] <- create_state_settings("Simple",
-    transition = create_transition_settings("conditional", options = cond_options))
+    transition = create_transition_settings("conditional", options = cond_options)
+  )
   states[[join_label]] <- create_state_settings("Simple",
-    transition = create_transition_settings("direct", to = "__PENDING__"))
+    transition = create_transition_settings("direct", to = "__PENDING__")
+  )
 
   list(states = states, entry = check_label, exit = join_label)
 }
@@ -231,10 +267,14 @@ classify <- function(name, condition, options, attribute = NULL, terminal_option
 #'   contract never changes -- `chain()`/`pathways()`/`classify()` accept this like any other
 #'   fragment.
 #' @examples
-#' body <- chain(create_delay(90, 90, "days"),
-#'                create_counter("readings", action = "increment", label = "Count"))
-#' repeat_until(body, until = create_logic_settings("Attribute", attribute = "readings",
-#'                                                   operator = ">=", value = 2))
+#' body <- chain(
+#'   create_delay(90, 90, "days"),
+#'   create_counter("readings", action = "increment", label = "Count")
+#' )
+#' repeat_until(body, until = create_logic_settings("Attribute",
+#'   attribute = "readings",
+#'   operator = ">=", value = 2
+#' ))
 #' @export
 repeat_until <- function(body, until, label = "Loop") {
   check_label <- paste0(label, " Until Check")
@@ -246,9 +286,11 @@ repeat_until <- function(body, until, label = "Loop") {
     transition = create_transition_settings("conditional", options = list(
       list(condition = until, transition = continue_label),
       list(transition = body$entry)
-    )))
+    ))
+  )
   states[[continue_label]] <- create_state_settings("Simple",
-    transition = create_transition_settings("direct", to = "__PENDING__"))
+    transition = create_transition_settings("direct", to = "__PENDING__")
+  )
 
   list(states = states, entry = body$entry, exit = continue_label)
 }
