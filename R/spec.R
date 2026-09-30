@@ -72,9 +72,15 @@ build_module_spec <- function(
 ) {
   exposure_state <- match.arg(exposure_state)
 
-  .required_cols(exposure_codes, c("option", "code", "display"), "exposure_codes")
+  .required_cols(
+    exposure_codes,
+    c("option", "code", "display"),
+    "exposure_codes"
+  )
   if (!"comparator" %in% names(exposure_shares)) {
-    stop("build_module_spec(): exposure_shares must include a \"comparator\" entry")
+    stop(
+      "build_module_spec(): exposure_shares must include a \"comparator\" entry"
+    )
   }
   missing_shares <- setdiff(exposure_codes$option, names(exposure_shares))
   if (length(missing_shares) > 0) {
@@ -95,14 +101,29 @@ build_module_spec <- function(
     )
   })
 
-  total_share <- sum(vapply(exposure_options, function(o) o$share, numeric(1))) +
+  total_share <- sum(vapply(
+    exposure_options,
+    function(o) o$share,
+    numeric(1)
+  )) +
     exposure_shares[["comparator"]]
   if (!isTRUE(all.equal(unname(total_share), 1))) {
-    stop(sprintf("build_module_spec(): exposure_shares must sum to 1, got %s", total_share))
+    stop(sprintf(
+      "build_module_spec(): exposure_shares must sum to 1, got %s",
+      total_share
+    ))
   }
 
-  label_col <- if ("event_abbreviation" %in% names(outcome_codes)) "event_abbreviation" else "label"
-  .required_cols(outcome_codes, c(label_col, "code", "display"), "outcome_codes")
+  label_col <- if ("event_abbreviation" %in% names(outcome_codes)) {
+    "event_abbreviation"
+  } else {
+    "label"
+  }
+  .required_cols(
+    outcome_codes,
+    c(label_col, "code", "display"),
+    "outcome_codes"
+  )
   outcome_system <- .fallback_col(outcome_codes, "system", "coding_system")
 
   probability_values <- if (
@@ -135,10 +156,17 @@ build_module_spec <- function(
       attribute = exposure_attribute,
       state_type = exposure_state,
       options = exposure_options,
-      comparator = list(include = TRUE, share = unname(exposure_shares[["comparator"]]))
+      comparator = list(
+        include = TRUE,
+        share = unname(exposure_shares[["comparator"]])
+      )
     ),
     outcomes = list(
-      default_probability = if (is.numeric(outcome_probability)) outcome_probability[1] else NULL,
+      default_probability = if (is.numeric(outcome_probability)) {
+        outcome_probability[1]
+      } else {
+        NULL
+      },
       default_delay = outcome_delay,
       items = outcome_items
     ),
@@ -179,7 +207,8 @@ read_module_spec <- function(path) {
   if (length(missing) > 0) {
     stop(sprintf(
       "%s is missing required top-level key(s): %s",
-      source_label, paste(missing, collapse = ", ")
+      source_label,
+      paste(missing, collapse = ", ")
     ))
   }
 }
@@ -195,7 +224,9 @@ read_module_spec <- function(path) {
   missing <- setdiff(cols, names(df))
   if (length(missing) > 0) {
     stop(sprintf(
-      "build_module_spec(): %s is missing column(s): %s", df_name, paste(missing, collapse = ", ")
+      "build_module_spec(): %s is missing column(s): %s",
+      df_name,
+      paste(missing, collapse = ", ")
     ))
   }
 }
@@ -217,7 +248,8 @@ read_module_spec <- function(path) {
   }
   stop(sprintf(
     "build_module_spec(): expected one of these columns: %s. Found: %s.",
-    paste(c(...), collapse = ", "), paste(names(df), collapse = ", ")
+    paste(c(...), collapse = ", "),
+    paste(names(df), collapse = ", ")
   ))
 }
 
@@ -230,11 +262,20 @@ read_module_spec <- function(path) {
 #'   condition.
 #' @noRd
 .exposure_leaf <- function(state_type, label, code) {
-  switch(state_type,
+  switch(
+    state_type,
     vaccine = create_vaccine(label, code),
-    medication = create_step("MedicationOrder", codes = list(code), chronic = TRUE, label = label),
+    medication = create_step(
+      "MedicationOrder",
+      codes = list(code),
+      chronic = TRUE,
+      label = label
+    ),
     condition = create_condition(label, code, diagnosis = "wellness"),
-    stop(sprintf("build_module_from_spec(): unknown exposure state_type '%s'", state_type))
+    stop(sprintf(
+      "build_module_from_spec(): unknown exposure state_type '%s'",
+      state_type
+    ))
   )
 }
 
@@ -270,13 +311,24 @@ build_module_from_spec <- function(x, as_json = TRUE, validate = TRUE) {
     x
   }
 
-  opt_names <- vapply(spec$exposure$options, function(opt) opt$option, character(1))
+  opt_names <- vapply(
+    spec$exposure$options,
+    function(opt) opt$option,
+    character(1)
+  )
   exposure_options <- .named_list(
     lapply(spec$exposure$options, function(opt) {
       code <- create_component_settings(
-        "code", system = opt$system, code = opt$code, display = opt$display
+        "code",
+        system = opt$system,
+        code = opt$code,
+        display = opt$display
       )
-      .exposure_leaf(spec$exposure$state_type, paste0("Exposure - ", opt$option), code)
+      .exposure_leaf(
+        spec$exposure$state_type,
+        paste0("Exposure - ", opt$option),
+        code
+      )
     }),
     opt_names
   )
@@ -288,7 +340,10 @@ build_module_from_spec <- function(x, as_json = TRUE, validate = TRUE) {
 
   if (isTRUE(spec$exposure$comparator$include)) {
     exposure_options <- c(exposure_options, list(comparator = NULL))
-    exposure_shares <- c(exposure_shares, c(comparator = spec$exposure$comparator$share))
+    exposure_shares <- c(
+      exposure_shares,
+      c(comparator = spec$exposure$comparator$share)
+    )
   }
 
   exposure_fragment <- pathways(
@@ -300,14 +355,26 @@ build_module_from_spec <- function(x, as_json = TRUE, validate = TRUE) {
 
   outcome_fragments <- lapply(spec$outcomes$items, function(item) {
     code <- create_component_settings(
-      "code", system = item$system, code = item$code, display = item$display
+      "code",
+      system = item$system,
+      code = item$code,
+      display = item$display
     )
     onset <- create_condition(
-      paste0("Outcome - ", item$event_abbreviation), code,
+      paste0("Outcome - ", item$event_abbreviation),
+      code,
       diagnosis = "wellness"
     )
-    p <- if (!is.null(item$probability)) item$probability else spec$outcomes$default_probability
-    delay <- if (!is.null(item$delay)) item$delay else spec$outcomes$default_delay
+    p <- if (!is.null(item$probability)) {
+      item$probability
+    } else {
+      spec$outcomes$default_probability
+    }
+    delay <- if (!is.null(item$delay)) {
+      item$delay
+    } else {
+      spec$outcomes$default_delay
+    }
     if (is.null(p) || is.null(delay)) {
       stop(sprintf(
         "build_module_from_spec(): outcome item '%s' has no probability/delay and no default is set",
@@ -316,7 +383,9 @@ build_module_from_spec <- function(x, as_json = TRUE, validate = TRUE) {
     }
     chain(
       create_delay(
-        delay$low, delay$high, delay$unit,
+        delay$low,
+        delay$high,
+        delay$unit,
         label = paste0(item$event_abbreviation, " Delay")
       ),
       pathways(
@@ -328,12 +397,23 @@ build_module_from_spec <- function(x, as_json = TRUE, validate = TRUE) {
   })
 
   inclusion_fragment <- if (!is.null(spec$inclusion_criteria)) {
-    do.call(create_population, c(list(label = "Inclusion Criteria"), spec$inclusion_criteria))
+    do.call(
+      create_population,
+      c(list(label = "Inclusion Criteria"), spec$inclusion_criteria)
+    )
   } else {
     NULL
   }
 
-  full_fragment <- do.call(chain, c(list(inclusion_fragment, exposure_fragment), outcome_fragments))
+  full_fragment <- do.call(
+    chain,
+    c(list(inclusion_fragment, exposure_fragment), outcome_fragments)
+  )
 
-  build_cohort_module(spec$name, full_fragment, as_json = as_json, validate = validate)
+  build_cohort_module(
+    spec$name,
+    full_fragment,
+    as_json = as_json,
+    validate = validate
+  )
 }

@@ -126,9 +126,17 @@ read_bridge_codelist <- function(
 
   code_col <- .resolve_bridge_column("code", required = TRUE, columns, df)
   display_col <- .resolve_bridge_column("display", required = TRUE, columns, df)
-  type_col <- .resolve_bridge_column("type", required = !is.null(type), columns, df)
+  type_col <- .resolve_bridge_column(
+    "type",
+    required = !is.null(type),
+    columns,
+    df
+  )
   coding_system_col <- .resolve_bridge_column(
-    "coding_system", required = !is.null(coding_system), columns, df
+    "coding_system",
+    required = !is.null(coding_system),
+    columns,
+    df
   )
   event_abbrev_col <- if (needs_event_abbrev_col) {
     .resolve_bridge_column("event_abbreviation", required = TRUE, columns, df)
@@ -151,14 +159,19 @@ read_bridge_codelist <- function(
     keep <- keep & toupper(trimws(df[[type_col]])) == toupper(trimws(type))
   }
   if (!is.null(coding_system)) {
-    keep <- keep & toupper(trimws(df[[coding_system_col]])) == toupper(trimws(coding_system))
+    keep <- keep &
+      toupper(trimws(df[[coding_system_col]])) == toupper(trimws(coding_system))
   }
   if (!is.null(event_abbreviation)) {
-    keep <- keep & toupper(trimws(df[[event_abbrev_col]])) == toupper(trimws(event_abbreviation))
+    keep <- keep &
+      toupper(trimws(df[[event_abbrev_col]])) ==
+        toupper(trimws(event_abbreviation))
   }
   out <- df[keep, , drop = FALSE]
   if (nrow(out) == 0) {
-    stop("read_bridge_codelist(): no rows remain after filtering by `type`/`coding_system`/`event_abbreviation`.")
+    stop(
+      "read_bridge_codelist(): no rows remain after filtering by `type`/`coding_system`/`event_abbreviation`."
+    )
   }
 
   result <- data.frame(
@@ -166,9 +179,15 @@ read_bridge_codelist <- function(
     display = out[[display_col]],
     stringsAsFactors = FALSE
   )
-  if (!is.null(coding_system_col)) result$coding_system <- out[[coding_system_col]]
-  if (!is.null(type_col)) result$type <- out[[type_col]]
-  if (!is.null(event_abbrev_col)) result$event_abbreviation <- out[[event_abbrev_col]]
+  if (!is.null(coding_system_col)) {
+    result$coding_system <- out[[coding_system_col]]
+  }
+  if (!is.null(type_col)) {
+    result$type <- out[[type_col]]
+  }
+  if (!is.null(event_abbrev_col)) {
+    result$event_abbreviation <- out[[event_abbrev_col]]
+  }
 
   if (is.null(group_by)) {
     rownames(result) <- NULL
@@ -180,7 +199,12 @@ read_bridge_codelist <- function(
   }
   tags_raw <- out[[tags_col]]
 
-  ranks <- vapply(tags_raw, .tag_rank, integer(1), tag_preference = tag_preference)
+  ranks <- vapply(
+    tags_raw,
+    .tag_rank,
+    integer(1),
+    tag_preference = tag_preference
+  )
 
   all_groups <- unique(result[[group_by]])
   eligible <- !is.na(ranks)
@@ -197,7 +221,9 @@ read_bridge_codelist <- function(
   if (length(missing_groups) > 0) {
     stop(sprintf(
       "read_bridge_codelist(): %d value(s) of '%s' have no row matching tag_preference = [%s]: %s",
-      length(missing_groups), group_by, paste(tag_preference, collapse = ", "),
+      length(missing_groups),
+      group_by,
+      paste(tag_preference, collapse = ", "),
       paste(missing_groups, collapse = ", ")
     ))
   }
@@ -217,9 +243,16 @@ read_bridge_codelist <- function(
     if (!file.exists(x)) {
       stop(sprintf("read_bridge_codelist(): file not found: %s", x))
     }
-    return(utils::read.csv(x, colClasses = "character", stringsAsFactors = FALSE, check.names = FALSE))
+    return(utils::read.csv(
+      x,
+      colClasses = "character",
+      stringsAsFactors = FALSE,
+      check.names = FALSE
+    ))
   }
-  stop("read_bridge_codelist(): `x` must be a file path (character) or a data.frame")
+  stop(
+    "read_bridge_codelist(): `x` must be a file path (character) or a data.frame"
+  )
 }
 
 #' Map a canonical codelist field to the actual column name in a BRIDGE table
@@ -241,7 +274,8 @@ read_bridge_codelist <- function(
           "read_bridge_codelist(): '%s' could not be resolved (columns$%s = %s). ",
           "Available columns: %s."
         ),
-        canonical, canonical,
+        canonical,
+        canonical,
         if (is.null(actual)) "NULL" else sprintf("\"%s\"", actual),
         paste(names(df), collapse = ", ")
       ))

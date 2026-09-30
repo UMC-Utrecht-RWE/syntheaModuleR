@@ -122,7 +122,11 @@ test_that("build_module_spec falls back from `system` to `coding_system` column 
 # write_module_spec() / read_module_spec() ----
 
 test_that("write_module_spec then read_module_spec round-trips the spec", {
-  spec <- a_spec(inclusion_criteria = list(age = list(operator = ">=", quantity = 18, unit = "years")))
+  spec <- a_spec(
+    inclusion_criteria = list(
+      age = list(operator = ">=", quantity = 18, unit = "years")
+    )
+  )
   path <- tempfile(fileext = ".yaml")
   write_module_spec(spec, path)
   spec2 <- read_module_spec(path)
@@ -152,7 +156,11 @@ test_that("build_module_from_spec omits the Guard entirely when inclusion_criter
 })
 
 test_that("build_module_from_spec prepends a Guard when inclusion_criteria is present", {
-  spec <- a_spec(inclusion_criteria = list(age = list(operator = ">=", quantity = 60, unit = "years")))
+  spec <- a_spec(
+    inclusion_criteria = list(
+      age = list(operator = ">=", quantity = 60, unit = "years")
+    )
+  )
   m <- module_states(build_module_from_spec(spec))
   expect_equal(m$Initial$direct_transition, "Inclusion Criteria")
   expect_equal(m[["Inclusion Criteria"]]$type, "Guard")
@@ -164,13 +172,17 @@ test_that("build_module_from_spec builds a Vaccine state for exposure_state = 'v
 })
 
 test_that("build_module_from_spec builds a bare MedicationOrder for exposure_state = 'medication'", {
-  m <- module_states(build_module_from_spec(a_spec(exposure_state = "medication")))
+  m <- module_states(build_module_from_spec(a_spec(
+    exposure_state = "medication"
+  )))
   expect_equal(m[["Exposure - drugA"]]$type, "MedicationOrder")
   expect_null(m[["Exposure - drugA"]]$reason)
 })
 
 test_that("build_module_from_spec builds a ConditionOnset for exposure_state = 'condition'", {
-  m <- module_states(build_module_from_spec(a_spec(exposure_state = "condition")))
+  m <- module_states(build_module_from_spec(a_spec(
+    exposure_state = "condition"
+  )))
   expect_equal(m[["Exposure - drugA"]]$type, "ConditionOnset")
 })
 
@@ -208,6 +220,8 @@ test_that("build_module_from_spec honors a per-item probability/delay override o
   m <- module_states(build_module_from_spec(spec))
   expect_equal(m[["OUT1 Delay"]]$range$low, 5)
   choice <- m[["OUT1 Onset Choice"]]$distributed_transition
-  onset_share <- Filter(function(o) o$transition == "Outcome - OUT1", choice)[[1]]$distribution
+  onset_share <- Filter(function(o) o$transition == "Outcome - OUT1", choice)[[
+    1
+  ]]$distribution
   expect_equal(onset_share, 0.9)
 })

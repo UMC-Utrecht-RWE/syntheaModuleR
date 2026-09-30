@@ -7,7 +7,10 @@ test_that("bridge_columns returns Family-A defaults, overridable per field", {
   expect_equal(defaults$coding_system, "coding_system")
   expect_equal(defaults$display, "code_name")
 
-  overridden <- bridge_columns(coding_system = "product_identifier", display = "product_name")
+  overridden <- bridge_columns(
+    coding_system = "product_identifier",
+    display = "product_name"
+  )
   expect_equal(overridden$coding_system, "product_identifier")
   expect_equal(overridden$display, "product_name")
   # untouched fields keep their default
@@ -19,16 +22,22 @@ test_that("bridge_columns returns Family-A defaults, overridable per field", {
 aesi_fixture <- function() {
   data.frame(
     event_abbreviation = c(
-      "ANAPHYLAXIS", "ANAPHYLAXIS", "ANAPHYLAXIS",
+      "ANAPHYLAXIS",
+      "ANAPHYLAXIS",
+      "ANAPHYLAXIS",
       "GBS",
-      "ALPS", "ALPS"
+      "ALPS",
+      "ALPS"
     ),
     coding_system = "MEDCODEID",
     code = c("1", "2", "3", "4", "5", "6"),
     code_name = c(
-      "Chronic orthostatic hypotension", "Allergic reaction", "Anaphylaxis care",
+      "Chronic orthostatic hypotension",
+      "Allergic reaction",
+      "Anaphylaxis care",
       "Guillain-Barre syndrome",
-      "possible-only concept A", "possible-only concept B"
+      "possible-only concept A",
+      "possible-only concept B"
     ),
     tags = c("exclude", "possible", "narrow", "narrow", "possible", "possible"),
     type = "AESI",
@@ -39,7 +48,9 @@ aesi_fixture <- function() {
 test_that("read_bridge_codelist prefers narrow-tagged rows over possible/exclude", {
   result <- read_bridge_codelist(
     aesi_fixture(),
-    type = "AESI", coding_system = "MEDCODEID", group_by = "event_abbreviation"
+    type = "AESI",
+    coding_system = "MEDCODEID",
+    group_by = "event_abbreviation"
   )
   expect_equal(nrow(result), 3)
   anaph <- result[result$event_abbreviation == "ANAPHYLAXIS", ]
@@ -49,11 +60,15 @@ test_that("read_bridge_codelist prefers narrow-tagged rows over possible/exclude
 test_that("read_bridge_codelist falls back to possible when no narrow row exists", {
   result <- read_bridge_codelist(
     aesi_fixture(),
-    type = "AESI", coding_system = "MEDCODEID", group_by = "event_abbreviation"
+    type = "AESI",
+    coding_system = "MEDCODEID",
+    group_by = "event_abbreviation"
   )
   alps <- result[result$event_abbreviation == "ALPS", ]
   expect_equal(nrow(alps), 1)
-  expect_true(alps$display %in% c("possible-only concept A", "possible-only concept B"))
+  expect_true(
+    alps$display %in% c("possible-only concept A", "possible-only concept B")
+  )
 })
 
 test_that("read_bridge_codelist splits compound multiple:x+y tags and matches on any constituent", {
@@ -68,7 +83,9 @@ test_that("read_bridge_codelist splits compound multiple:x+y tags and matches on
   )
   result <- read_bridge_codelist(
     df,
-    type = "AESI", coding_system = "MEDCODEID", group_by = "event_abbreviation"
+    type = "AESI",
+    coding_system = "MEDCODEID",
+    group_by = "event_abbreviation"
   )
   expect_equal(nrow(result), 1)
   expect_equal(result$display, "Compound-tagged concept")
@@ -85,7 +102,12 @@ test_that("read_bridge_codelist errors, naming the concept, when every row is ex
     stringsAsFactors = FALSE
   )
   expect_error(
-    read_bridge_codelist(df, type = "AESI", coding_system = "MEDCODEID", group_by = "event_abbreviation"),
+    read_bridge_codelist(
+      df,
+      type = "AESI",
+      coding_system = "MEDCODEID",
+      group_by = "event_abbreviation"
+    ),
     "ONLYEXCLUDE"
   )
 })
@@ -97,16 +119,29 @@ test_that("read_bridge_codelist with group_by = NULL returns every filtered row 
     event_abbreviation = c("RSV", "RSV", "RSV", "OTHER"),
     product_identifier = "PRODCODEID",
     code = c("A1", "A2", "A3", "B1"),
-    product_name = c("Abrysvo product", "Arexvy product", "Unspecified RSV product", "Not RSV"),
+    product_name = c(
+      "Abrysvo product",
+      "Arexvy product",
+      "Unspecified RSV product",
+      "Not RSV"
+    ),
     stringsAsFactors = FALSE
   )
   result <- read_bridge_codelist(
     df,
-    event_abbreviation = "RSV", coding_system = "PRODCODEID",
-    columns = bridge_columns(coding_system = "product_identifier", display = "product_name")
+    event_abbreviation = "RSV",
+    coding_system = "PRODCODEID",
+    columns = bridge_columns(
+      coding_system = "product_identifier",
+      display = "product_name"
+    )
   )
   expect_equal(nrow(result), 3)
-  expect_true(all(grepl("RSV|Abrysvo|Arexvy", result$display, ignore.case = TRUE)))
+  expect_true(all(grepl(
+    "RSV|Abrysvo|Arexvy",
+    result$display,
+    ignore.case = TRUE
+  )))
 })
 
 # Column aliasing / real-world deviations ----
@@ -123,7 +158,9 @@ test_that("read_bridge_codelist tolerates a missing `origin` column and a rename
   )
   result <- read_bridge_codelist(
     df,
-    type = "AESI", coding_system = "MEDCODEID", group_by = "event_abbreviation",
+    type = "AESI",
+    coding_system = "MEDCODEID",
+    group_by = "event_abbreviation",
     columns = bridge_columns(display = "label")
   )
   expect_equal(result$display, "Renamed display column")
@@ -131,8 +168,11 @@ test_that("read_bridge_codelist tolerates a missing `origin` column and a rename
 
 test_that("read_bridge_codelist errors clearly on a Family-B-shaped (OMOP-style) input", {
   omop_like <- data.frame(
-    omop_concept_id = 1, concept_code = "X", concept_name = "Y",
-    cdm_table_name = "Z", stringsAsFactors = FALSE
+    omop_concept_id = 1,
+    concept_code = "X",
+    concept_name = "Y",
+    cdm_table_name = "Z",
+    stringsAsFactors = FALSE
   )
   expect_error(
     read_bridge_codelist(omop_like, type = "AESI", group_by = "concept_code"),
@@ -146,7 +186,9 @@ test_that("read_bridge_codelist reads a file path with every column as character
   utils::write.csv(df, path, row.names = FALSE)
   result <- read_bridge_codelist(
     path,
-    type = "AESI", coding_system = "MEDCODEID", group_by = "event_abbreviation"
+    type = "AESI",
+    coding_system = "MEDCODEID",
+    group_by = "event_abbreviation"
   )
   expect_equal(nrow(result), 3)
   expect_type(result$code, "character")
