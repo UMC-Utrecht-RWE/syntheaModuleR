@@ -32,6 +32,6 @@ runs \code{validate_module()}).
 }
 \examples{
 \dontrun{
-build_module_from_spec("rsv_oa_1038.yaml")
+build_module_from_spec("vaccine_safety.yaml")
 }
 }

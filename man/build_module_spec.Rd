@@ -68,13 +68,13 @@ are always caller-supplied, every time.
 \examples{
 \dontrun{
 spec <- build_module_spec(
-  "rsv_oa_1038",
+  "vaccine_safety",
   exposure_codes = exposure_codes, exposure_shares = c(
     abrysvo = 0.25, arexvy = 0.25, other_rsv = 0.05, comparator = 0.45
   ),
   outcome_codes = aesi_codes, outcome_probability = 0.03,
   outcome_delay = list(low = 0, high = 1460, unit = "days")
 )
-write_module_spec(spec, "rsv_oa_1038.yaml")
+write_module_spec(spec, "vaccine_safety.yaml")
 }
 }

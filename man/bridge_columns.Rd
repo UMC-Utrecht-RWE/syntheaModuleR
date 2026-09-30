@@ -37,7 +37,7 @@ Confirmed real-world header variation across RWE-BRIDGE-style codelists (missing
 \code{concept_name} renamed \code{label}, a drug-proxy file using \code{product_identifier}/\code{product_name}
 instead of \code{coding_system}/\code{code_name}, ...) means a fixed set of column names can't be
 hardcoded. Every argument defaults to the "full events/AESI/COV codelist" header shape (the
-schema \code{read_bridge_codelist()}'s own reference case, RSV-OA-1038, uses); override individual
+schema \code{read_bridge_codelist()} was originally built against); override individual
 entries for a source that deviates, or set an entry to \code{NULL} to mean "this field doesn't exist
 in this source" (fine as long as nothing requires it -- see \code{read_bridge_codelist()}).
 }
