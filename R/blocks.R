@@ -308,7 +308,9 @@ create_condition <- function(
 #'   display = "Metformin hydrochloride 500 MG Oral Tablet"
 #' )
 #' create_medication("Metformin",
-#' metformin, condition = "Diabetes", duration = "long")
+#'   metformin,
+#'   condition = "Diabetes", duration = "long"
+#' )
 #' @export
 create_medication <- function(
   label,
@@ -455,7 +457,7 @@ create_vital_sign <- function(label, vital_sign, value = NULL, unit = NULL) {
 #' @return A fragment.
 #' @examples
 #' appendectomy <- create_component_settings("code",
-#'system = "SNOMED-CT", code = "80146002",
+#'   system = "SNOMED-CT", code = "80146002",
 #'   display = "Appendectomy"
 #' )
 #' create_procedure("Appendectomy", appendectomy)

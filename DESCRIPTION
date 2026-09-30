@@ -11,7 +11,8 @@ Roxygen: list(markdown = TRUE)
 Depends:
     R (>= 4.1.0)
 Imports:
-    jsonlite
+    jsonlite,
+    yaml
 Suggests:
     knitr,
     rmarkdown,
