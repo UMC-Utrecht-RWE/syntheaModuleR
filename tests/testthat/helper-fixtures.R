@@ -1,12 +1,23 @@
 # Shared fixtures reused across test files. testthat auto-sources helper-*.R before running tests.
 
-a_code <- function(code = "38341003", display = "Hypertension", system = "SNOMED-CT") {
-  create_component_settings("code", system = system, code = code, display = display)
+a_code <- function(
+  code = "38341003",
+  display = "Hypertension",
+  system = "SNOMED-CT"
+) {
+  create_component_settings(
+    "code",
+    system = system,
+    code = code,
+    display = display
+  )
 }
 
 another_code <- function() {
-  create_component_settings("code",
-    system = "RxNorm", code = "860975",
+  create_component_settings(
+    "code",
+    system = "RxNorm",
+    code = "860975",
     display = "Metformin hydrochloride 500 MG Oral Tablet"
   )
 }
@@ -18,7 +29,8 @@ a_range <- function(low = 1, high = 5, unit = "days") {
 # A minimal, valid Initial -> Terminal states list, usable directly with build_module().
 minimal_states <- function() {
   list(
-    Initial = create_state_settings("Initial",
+    Initial = create_state_settings(
+      "Initial",
       transition = create_transition_settings("direct", to = "Terminal")
     ),
     Terminal = create_state_settings("Terminal")

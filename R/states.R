@@ -4,90 +4,153 @@
 
 .state_schema <- list(
   Initial = list(required = c(), optional = c(), needs_transition = "required"),
-  Terminal = list(required = c(), optional = c(), needs_transition = "forbidden"),
-  Simple = list(required = c(), optional = c(), needs_transition = "required"),
-  CallSubmodule = list(required = c("submodule"), optional = c(), needs_transition = "required"),
-  Physiology = list(
-    required = c("model", "solver", "step_size", "sim_duration", "alt_direct_transition"),
-    optional = c("lead_time", "inputs", "outputs"),
-    array = c("inputs", "outputs"), needs_transition = "required"
+  Terminal = list(
+    required = c(),
+    optional = c(),
+    needs_transition = "forbidden"
   ),
-  Guard = list(required = c("allow"), optional = c(), needs_transition = "required"),
+  Simple = list(required = c(), optional = c(), needs_transition = "required"),
+  CallSubmodule = list(
+    required = c("submodule"),
+    optional = c(),
+    needs_transition = "required"
+  ),
+  Physiology = list(
+    required = c(
+      "model",
+      "solver",
+      "step_size",
+      "sim_duration",
+      "alt_direct_transition"
+    ),
+    optional = c("lead_time", "inputs", "outputs"),
+    array = c("inputs", "outputs"),
+    needs_transition = "required"
+  ),
+  Guard = list(
+    required = c("allow"),
+    optional = c(),
+    needs_transition = "required"
+  ),
   Delay = list(
-    required = c(), optional = c("range", "exact", "distribution", "unit"),
-    one_of = list(list(fields = c("range", "exact", "distribution"), required = TRUE)),
+    required = c(),
+    optional = c("range", "exact", "distribution", "unit"),
+    one_of = list(list(
+      fields = c("range", "exact", "distribution"),
+      required = TRUE
+    )),
     needs_transition = "required"
   ),
   SetAttribute = list(
     required = c("attribute"),
     optional = c(
-      "value", "value_code", "value_attribute", "range",
-      "expression", "series_data", "period", "distribution"
+      "value",
+      "value_code",
+      "value_attribute",
+      "range",
+      "expression",
+      "series_data",
+      "period",
+      "distribution"
     ),
     needs_transition = "required"
   ),
   Counter = list(
-    required = c("attribute", "action"), optional = c("amount"),
+    required = c("attribute", "action"),
+    optional = c("amount"),
     needs_transition = "required"
   ),
   Encounter = list(
     required = c(),
     optional = c(
-      "wellness", "encounter_class", "codes", "reason",
+      "wellness",
+      "encounter_class",
+      "codes",
+      "reason",
       "telemedicine_possibility"
     ),
-    array = c("codes"), needs_transition = "required"
+    array = c("codes"),
+    needs_transition = "required"
   ),
   EncounterEnd = list(
-    required = c(), optional = c("discharge_disposition"),
+    required = c(),
+    optional = c("discharge_disposition"),
     needs_transition = "required"
   ),
   ConditionOnset = list(
-    required = c("codes"), optional = c("target_encounter", "assign_to_attribute"),
-    array = c("codes"), needs_transition = "required"
+    required = c("codes"),
+    optional = c("target_encounter", "assign_to_attribute"),
+    array = c("codes"),
+    needs_transition = "required"
   ),
   ConditionEnd = list(
-    required = c(), optional = c("codes", "condition_onset", "referenced_by_attribute"),
-    array = c("codes"), needs_transition = "required"
+    required = c(),
+    optional = c("codes", "condition_onset", "referenced_by_attribute"),
+    array = c("codes"),
+    needs_transition = "required"
   ),
   AllergyOnset = list(
     required = c("codes"),
     optional = c(
-      "target_encounter", "assign_to_attribute", "allergy_type",
-      "category", "reactions"
+      "target_encounter",
+      "assign_to_attribute",
+      "allergy_type",
+      "category",
+      "reactions"
     ),
-    array = c("codes", "reactions"), needs_transition = "required"
+    array = c("codes", "reactions"),
+    needs_transition = "required"
   ),
   AllergyEnd = list(
-    required = c(), optional = c("codes", "allergy_onset", "referenced_by_attribute"),
-    array = c("codes"), needs_transition = "required"
+    required = c(),
+    optional = c("codes", "allergy_onset", "referenced_by_attribute"),
+    array = c("codes"),
+    needs_transition = "required"
   ),
   MedicationOrder = list(
     required = c("codes"),
     optional = c(
-      "reason", "prescription", "administration", "chronic",
+      "reason",
+      "prescription",
+      "administration",
+      "chronic",
       "assign_to_attribute"
     ),
-    array = c("codes"), needs_transition = "required"
+    array = c("codes"),
+    needs_transition = "required"
   ),
   MedicationEnd = list(
-    required = c(), optional = c("codes", "medication_order", "referenced_by_attribute"),
-    array = c("codes"), needs_transition = "required"
+    required = c(),
+    optional = c("codes", "medication_order", "referenced_by_attribute"),
+    array = c("codes"),
+    needs_transition = "required"
   ),
   CarePlanStart = list(
     required = c("codes"),
     optional = c("activities", "goals", "reason", "assign_to_attribute"),
-    array = c("codes", "activities", "goals"), needs_transition = "required"
+    array = c("codes", "activities", "goals"),
+    needs_transition = "required"
   ),
   CarePlanEnd = list(
-    required = c(), optional = c("codes", "careplan", "referenced_by_attribute"),
-    array = c("codes"), needs_transition = "required"
+    required = c(),
+    optional = c("codes", "careplan", "referenced_by_attribute"),
+    array = c("codes"),
+    needs_transition = "required"
   ),
   Procedure = list(
     required = c("codes"),
-    optional = c("reason", "duration", "assign_to_attribute", "distribution", "unit"),
+    optional = c(
+      "reason",
+      "duration",
+      "assign_to_attribute",
+      "distribution",
+      "unit"
+    ),
     array = c("codes"),
-    one_of = list(list(fields = c("duration", "distribution"), required = FALSE)),
+    one_of = list(list(
+      fields = c("duration", "distribution"),
+      required = FALSE
+    )),
     needs_transition = "required"
   ),
   VitalSign = list(
@@ -108,19 +171,32 @@
   Observation = list(
     required = c("codes"),
     optional = c(
-      "value_code", "attribute", "vital_sign", "sampled_data",
-      "attachment", "category", "unit", "exact", "range",
-      "expression", "distribution"
+      "value_code",
+      "attribute",
+      "vital_sign",
+      "sampled_data",
+      "attachment",
+      "category",
+      "unit",
+      "exact",
+      "range",
+      "expression",
+      "distribution"
     ),
-    array = c("codes"), needs_transition = "optional"
+    array = c("codes"),
+    needs_transition = "optional"
   ),
   MultiObservation = list(
-    required = c("codes", "observations"), optional = c("category"),
-    array = c("codes", "observations"), needs_transition = "required"
+    required = c("codes", "observations"),
+    optional = c("category"),
+    array = c("codes", "observations"),
+    needs_transition = "required"
   ),
   DiagnosticReport = list(
-    required = c("codes", "observations"), optional = c(),
-    array = c("codes", "observations"), needs_transition = "required"
+    required = c("codes", "observations"),
+    optional = c(),
+    array = c("codes", "observations"),
+    needs_transition = "required"
   ),
 
   # `series` items follow HealthRecord.ImagingStudy.Series's JSON shape (modality, body_site,
@@ -128,7 +204,8 @@
   ImagingStudy = list(
     required = c("procedure_code", "series"),
     optional = c("min_number_series", "max_number_series"),
-    array = c("series"), needs_transition = "required"
+    array = c("series"),
+    needs_transition = "required"
   ),
   Symptom = list(
     required = c("symptom"),
@@ -139,27 +216,41 @@
   # NOTE: singular `code` (one create_component_settings("code", ...) result), unlike every
   # *End state's plural `codes` list below -- easy to mix up, called out deliberately.
   Device = list(
-    required = c("code"), optional = c("manufacturer", "model", "assign_to_attribute"),
+    required = c("code"),
+    optional = c("manufacturer", "model", "assign_to_attribute"),
     needs_transition = "required"
   ),
   DeviceEnd = list(
-    required = c(), optional = c("codes", "device", "referenced_by_attribute"),
-    array = c("codes"), needs_transition = "required"
+    required = c(),
+    optional = c("codes", "device", "referenced_by_attribute"),
+    array = c("codes"),
+    needs_transition = "required"
   ),
 
   # each `supplies` item is a raw list(code = create_component_settings("code", ...),
   # quantity = <n>) -- not independently schema-validated.
   SupplyList = list(
-    required = c("supplies"), optional = c(), array = c("supplies"),
+    required = c("supplies"),
+    optional = c(),
+    array = c("supplies"),
     needs_transition = "required"
   ),
   Death = list(
     required = c(),
-    optional = c("codes", "condition_onset", "referenced_by_attribute", "range", "exact"),
-    array = c("codes"), needs_transition = "required"
+    optional = c(
+      "codes",
+      "condition_onset",
+      "referenced_by_attribute",
+      "range",
+      "exact"
+    ),
+    array = c("codes"),
+    needs_transition = "required"
   ),
   Vaccine = list(
-    required = c("series", "codes"), optional = c(), array = c("codes"),
+    required = c("series", "codes"),
+    optional = c(),
+    array = c("codes"),
     needs_transition = "required"
   )
 )
@@ -200,68 +291,70 @@
 #'   transition = create_transition_settings("direct", to = "Terminal")
 #' )
 #' @export
-create_state_settings <- function(type,
-                                  action = NULL,
-                                  activities = NULL,
-                                  administration = NULL,
-                                  allergy_onset = NULL,
-                                  allergy_type = NULL,
-                                  allow = NULL,
-                                  alt_direct_transition = NULL,
-                                  amount = NULL,
-                                  assign_to_attribute = NULL,
-                                  attachment = NULL,
-                                  attribute = NULL,
-                                  careplan = NULL,
-                                  category = NULL,
-                                  cause = NULL,
-                                  chronic = NULL,
-                                  code = NULL,
-                                  codes = NULL,
-                                  condition_onset = NULL,
-                                  device = NULL,
-                                  discharge_disposition = NULL,
-                                  distribution = NULL,
-                                  duration = NULL,
-                                  encounter_class = NULL,
-                                  exact = NULL,
-                                  expression = NULL,
-                                  goals = NULL,
-                                  inputs = NULL,
-                                  lead_time = NULL,
-                                  manufacturer = NULL,
-                                  max_number_series = NULL,
-                                  medication_order = NULL,
-                                  min_number_series = NULL,
-                                  model = NULL,
-                                  observations = NULL,
-                                  outputs = NULL,
-                                  period = NULL,
-                                  prescription = NULL,
-                                  probability = NULL,
-                                  procedure_code = NULL,
-                                  range = NULL,
-                                  reactions = NULL,
-                                  reason = NULL,
-                                  referenced_by_attribute = NULL,
-                                  sampled_data = NULL,
-                                  series = NULL,
-                                  series_data = NULL,
-                                  sim_duration = NULL,
-                                  solver = NULL,
-                                  step_size = NULL,
-                                  submodule = NULL,
-                                  supplies = NULL,
-                                  symptom = NULL,
-                                  target_encounter = NULL,
-                                  telemedicine_possibility = NULL,
-                                  unit = NULL,
-                                  value = NULL,
-                                  value_attribute = NULL,
-                                  value_code = NULL,
-                                  vital_sign = NULL,
-                                  wellness = NULL,
-                                  transition = NULL) {
+create_state_settings <- function(
+  type,
+  action = NULL,
+  activities = NULL,
+  administration = NULL,
+  allergy_onset = NULL,
+  allergy_type = NULL,
+  allow = NULL,
+  alt_direct_transition = NULL,
+  amount = NULL,
+  assign_to_attribute = NULL,
+  attachment = NULL,
+  attribute = NULL,
+  careplan = NULL,
+  category = NULL,
+  cause = NULL,
+  chronic = NULL,
+  code = NULL,
+  codes = NULL,
+  condition_onset = NULL,
+  device = NULL,
+  discharge_disposition = NULL,
+  distribution = NULL,
+  duration = NULL,
+  encounter_class = NULL,
+  exact = NULL,
+  expression = NULL,
+  goals = NULL,
+  inputs = NULL,
+  lead_time = NULL,
+  manufacturer = NULL,
+  max_number_series = NULL,
+  medication_order = NULL,
+  min_number_series = NULL,
+  model = NULL,
+  observations = NULL,
+  outputs = NULL,
+  period = NULL,
+  prescription = NULL,
+  probability = NULL,
+  procedure_code = NULL,
+  range = NULL,
+  reactions = NULL,
+  reason = NULL,
+  referenced_by_attribute = NULL,
+  sampled_data = NULL,
+  series = NULL,
+  series_data = NULL,
+  sim_duration = NULL,
+  solver = NULL,
+  step_size = NULL,
+  submodule = NULL,
+  supplies = NULL,
+  symptom = NULL,
+  target_encounter = NULL,
+  telemedicine_possibility = NULL,
+  unit = NULL,
+  value = NULL,
+  value_attribute = NULL,
+  value_code = NULL,
+  vital_sign = NULL,
+  wellness = NULL,
+  transition = NULL
+) {
   fields <- list(
     action = action,
     activities = activities,
@@ -330,20 +423,32 @@ create_state_settings <- function(type,
   if (is.null(entry)) {
     stop(sprintf(
       "state: unknown type '%s'. Valid types: %s",
-      type, paste(names(.state_schema), collapse = ", ")
+      type,
+      paste(names(.state_schema), collapse = ", ")
     ))
   }
 
   tr_mode <- entry$needs_transition
-  if (is.null(tr_mode)) tr_mode <- "required"
+  if (is.null(tr_mode)) {
+    tr_mode <- "required"
+  }
   if (identical(tr_mode, "required") && is.null(transition)) {
-    stop(sprintf("state '%s': a transition is required (see create_transition_settings())", type))
+    stop(sprintf(
+      "state '%s': a transition is required (see create_transition_settings())",
+      type
+    ))
   }
   if (identical(tr_mode, "forbidden") && !is.null(transition)) {
     stop(sprintf("state '%s': must not have a transition", type))
   }
 
-  result <- .build_settings(.state_schema, type, fields, label = "state", discriminator_field = "type")
+  result <- .build_settings(
+    .state_schema,
+    type,
+    fields,
+    label = "state",
+    discriminator_field = "type"
+  )
   if (!is.null(transition)) {
     result <- c(result, transition)
   }

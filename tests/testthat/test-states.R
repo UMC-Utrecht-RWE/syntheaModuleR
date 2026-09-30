@@ -9,11 +9,16 @@ minimal_required_fields <- list(
   Simple = list(),
   CallSubmodule = list(submodule = "Some Submodule"),
   Physiology = list(
-    model = "model.xml", solver = "rk4", step_size = 0.1, sim_duration = 10,
+    model = "model.xml",
+    solver = "rk4",
+    step_size = 0.1,
+    sim_duration = 10,
     alt_direct_transition = "Terminal"
   ),
   Guard = list(allow = create_logic_settings("True")),
-  Delay = list(exact = create_component_settings("exact", quantity = 1, unit = "days")),
+  Delay = list(
+    exact = create_component_settings("exact", quantity = 1, unit = "days")
+  ),
   SetAttribute = list(attribute = "x"),
   Counter = list(attribute = "x", action = "increment"),
   Encounter = list(),
@@ -34,11 +39,17 @@ minimal_required_fields <- list(
   Observation = list(codes = list(a_code())),
   MultiObservation = list(
     codes = list(a_code()),
-    observations = list(create_state_settings("Observation", codes = list(a_code())))
+    observations = list(create_state_settings(
+      "Observation",
+      codes = list(a_code())
+    ))
   ),
   DiagnosticReport = list(
     codes = list(a_code()),
-    observations = list(create_state_settings("Observation", codes = list(a_code())))
+    observations = list(create_state_settings(
+      "Observation",
+      codes = list(a_code())
+    ))
   ),
   ImagingStudy = list(
     procedure_code = a_code(),
@@ -71,10 +82,15 @@ test_that("every state type builds successfully with minimal required fields", {
 test_that("missing a required field errors for every type that has one", {
   for (type in names(minimal_required_fields)) {
     args <- minimal_required_fields[[type]]
-    if (length(args) == 0) next
+    if (length(args) == 0) {
+      next
+    }
     dropped <- args[-1]
     if (!identical(type, "Terminal")) {
-      dropped$transition <- create_transition_settings("direct", to = "Terminal")
+      dropped$transition <- create_transition_settings(
+        "direct",
+        to = "Terminal"
+      )
     }
     expect_error(
       do.call(create_state_settings, c(list(type = type), dropped)),
@@ -93,14 +109,16 @@ test_that("a field valid elsewhere but not allowed for this type errors", {
   # but not part of Simple's schema -- this is what reaches .validate_settings()'s "unknown
   # field" check, unlike a name that isn't a function argument at all (R's own "unused argument").
   expect_error(
-    create_state_settings("Simple",
+    create_state_settings(
+      "Simple",
       attribute = "x",
       transition = create_transition_settings("direct", to = "Terminal")
     ),
     "unknown field"
   )
   expect_error(
-    create_state_settings("Simple",
+    create_state_settings(
+      "Simple",
       bogus_field = 1,
       transition = create_transition_settings("direct", to = "Terminal")
     ),
@@ -112,7 +130,10 @@ test_that("a field valid elsewhere but not allowed for this type errors", {
 
 test_that("Terminal must not have a transition", {
   expect_error(
-    create_state_settings("Terminal", transition = create_transition_settings("direct", to = "X")),
+    create_state_settings(
+      "Terminal",
+      transition = create_transition_settings("direct", to = "X")
+    ),
     "must not have a transition"
   )
   x <- create_state_settings("Terminal")
@@ -130,7 +151,8 @@ test_that("non-Observation, non-Terminal states require a transition", {
 test_that("Observation's transition is optional (nested-use case)", {
   x <- create_state_settings("Observation", codes = list(a_code()))
   expect_null(x$direct_transition)
-  x2 <- create_state_settings("Observation",
+  x2 <- create_state_settings(
+    "Observation",
     codes = list(a_code()),
     transition = create_transition_settings("direct", to = "Terminal")
   )
@@ -141,46 +163,68 @@ test_that("Observation's transition is optional (nested-use case)", {
 
 test_that("Delay requires exactly one of range/exact/distribution", {
   expect_error(
-    create_state_settings("Delay", transition = create_transition_settings("direct", to = "Terminal")),
-    "exactly one of"
-  )
-  expect_error(
-    create_state_settings("Delay",
-      range = a_range(), exact = create_component_settings("exact", quantity = 1),
+    create_state_settings(
+      "Delay",
       transition = create_transition_settings("direct", to = "Terminal")
     ),
     "exactly one of"
   )
-  ok <- create_state_settings("Delay",
+  expect_error(
+    create_state_settings(
+      "Delay",
+      range = a_range(),
+      exact = create_component_settings("exact", quantity = 1),
+      transition = create_transition_settings("direct", to = "Terminal")
+    ),
+    "exactly one of"
+  )
+  ok <- create_state_settings(
+    "Delay",
     range = a_range(),
     transition = create_transition_settings("direct", to = "Terminal")
   )
   expect_equal(ok$range, a_range())
 
-  ok2 <- create_state_settings("Delay",
-    distribution = create_component_settings("distribution", kind = "UNIFORM", low = 1, high = 3),
-    unit = "days", transition = create_transition_settings("direct", to = "Terminal")
+  ok2 <- create_state_settings(
+    "Delay",
+    distribution = create_component_settings(
+      "distribution",
+      kind = "UNIFORM",
+      low = 1,
+      high = 3
+    ),
+    unit = "days",
+    transition = create_transition_settings("direct", to = "Terminal")
   )
   expect_equal(ok2$distribution$kind, "UNIFORM")
 })
 
 test_that("Procedure allows at most one of duration/distribution (neither required)", {
-  ok_neither <- create_state_settings("Procedure",
+  ok_neither <- create_state_settings(
+    "Procedure",
     codes = list(a_code()),
     transition = create_transition_settings("direct", to = "Terminal")
   )
   expect_null(ok_neither$duration)
 
-  ok_one <- create_state_settings("Procedure",
-    codes = list(a_code()), duration = a_range(),
+  ok_one <- create_state_settings(
+    "Procedure",
+    codes = list(a_code()),
+    duration = a_range(),
     transition = create_transition_settings("direct", to = "Terminal")
   )
   expect_equal(ok_one$duration, a_range())
 
   expect_error(
-    create_state_settings("Procedure",
-      codes = list(a_code()), duration = a_range(),
-      distribution = create_component_settings("distribution", kind = "EXACT", value = 1),
+    create_state_settings(
+      "Procedure",
+      codes = list(a_code()),
+      duration = a_range(),
+      distribution = create_component_settings(
+        "distribution",
+        kind = "EXACT",
+        value = 1
+      ),
       transition = create_transition_settings("direct", to = "Terminal")
     ),
     "at most one of"
@@ -189,13 +233,15 @@ test_that("Procedure allows at most one of duration/distribution (neither requir
 
 test_that("VitalSign requires exactly one of exact/range/expression/distribution", {
   expect_error(
-    create_state_settings("VitalSign",
+    create_state_settings(
+      "VitalSign",
       vital_sign = "Blood Pressure Systolic",
       transition = create_transition_settings("direct", to = "Terminal")
     ),
     "exactly one of"
   )
-  ok <- create_state_settings("VitalSign",
+  ok <- create_state_settings(
+    "VitalSign",
     vital_sign = "Blood Pressure Systolic",
     range = a_range(low = 110, high = 130, unit = "mmHg"),
     transition = create_transition_settings("direct", to = "Terminal")
@@ -206,14 +252,16 @@ test_that("VitalSign requires exactly one of exact/range/expression/distribution
 # Field-name reuse and the Device/DeviceEnd asymmetry ----
 
 test_that("Device takes a singular `code`, DeviceEnd takes a plural `codes` list", {
-  dev <- create_state_settings("Device",
+  dev <- create_state_settings(
+    "Device",
     code = a_code(),
     transition = create_transition_settings("direct", to = "Terminal")
   )
   expect_equal(dev$code, a_code())
   expect_null(dev$codes)
 
-  dev_end <- create_state_settings("DeviceEnd",
+  dev_end <- create_state_settings(
+    "DeviceEnd",
     codes = list(a_code()),
     transition = create_transition_settings("direct", to = "Terminal")
   )
@@ -221,40 +269,59 @@ test_that("Device takes a singular `code`, DeviceEnd takes a plural `codes` list
 })
 
 test_that("`model` means different things for Physiology vs Device", {
-  phys <- create_state_settings("Physiology",
-    model = "cardiac.xml", solver = "rk4",
-    step_size = 0.1, sim_duration = 10, alt_direct_transition = "Terminal",
+  phys <- create_state_settings(
+    "Physiology",
+    model = "cardiac.xml",
+    solver = "rk4",
+    step_size = 0.1,
+    sim_duration = 10,
+    alt_direct_transition = "Terminal",
     transition = create_transition_settings("direct", to = "Terminal")
   )
   expect_equal(phys$model, "cardiac.xml")
 
-  dev <- create_state_settings("Device",
-    code = a_code(), model = "Model-100",
+  dev <- create_state_settings(
+    "Device",
+    code = a_code(),
+    model = "Model-100",
     transition = create_transition_settings("direct", to = "Terminal")
   )
   expect_equal(dev$model, "Model-100")
 })
 
 test_that("`series` means different things for ImagingStudy (list) vs Vaccine (dose number)", {
-  img <- create_state_settings("ImagingStudy",
+  img <- create_state_settings(
+    "ImagingStudy",
     procedure_code = a_code(),
     series = list(list(modality = "US", body_site = "trunk", instances = 1)),
     transition = create_transition_settings("direct", to = "Terminal")
   )
   expect_length(img$series, 1)
 
-  vax <- create_state_settings("Vaccine",
-    series = 2, codes = list(a_code()),
+  vax <- create_state_settings(
+    "Vaccine",
+    series = 2,
+    codes = list(a_code()),
     transition = create_transition_settings("direct", to = "Terminal")
   )
   expect_equal(vax$series, 2)
 })
 
 test_that("Physiology inputs/outputs accept io_mapper components as an array", {
-  mapper <- create_component_settings("io_mapper", type = "ATTRIBUTE", from = "x", to = "y")
-  phys <- create_state_settings("Physiology",
-    model = "m", solver = "rk4", step_size = 0.1,
-    sim_duration = 10, alt_direct_transition = "Terminal", inputs = list(mapper),
+  mapper <- create_component_settings(
+    "io_mapper",
+    type = "ATTRIBUTE",
+    from = "x",
+    to = "y"
+  )
+  phys <- create_state_settings(
+    "Physiology",
+    model = "m",
+    solver = "rk4",
+    step_size = 0.1,
+    sim_duration = 10,
+    alt_direct_transition = "Terminal",
+    inputs = list(mapper),
     transition = create_transition_settings("direct", to = "Terminal")
   )
   expect_length(phys$inputs, 1)

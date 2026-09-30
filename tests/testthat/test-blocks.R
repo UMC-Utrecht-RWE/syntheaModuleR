@@ -6,14 +6,26 @@ expect_fragment <- function(frag, entry = NULL, exit = NULL) {
   expect_named(frag, c("states", "entry", "exit"))
   expect_true(is.list(frag$states))
   expect_true(all(nzchar(names(frag$states))))
-  if (!is.null(entry)) expect_equal(frag$entry, entry)
-  if (!is.null(exit)) expect_equal(frag$exit, exit)
+  if (!is.null(entry)) {
+    expect_equal(frag$entry, entry)
+  }
+  if (!is.null(exit)) {
+    expect_equal(frag$exit, exit)
+  }
   expect_equal(frag$states[[frag$exit]]$direct_transition, "__PENDING__")
 }
 
 test_that("create_step wraps any state type as a one-state fragment", {
-  frag <- create_step("Symptom", symptom = "Chest Pain", label = "Chest Pain Symptom")
-  expect_fragment(frag, entry = "Chest Pain Symptom", exit = "Chest Pain Symptom")
+  frag <- create_step(
+    "Symptom",
+    symptom = "Chest Pain",
+    label = "Chest Pain Symptom"
+  )
+  expect_fragment(
+    frag,
+    entry = "Chest Pain Symptom",
+    exit = "Chest Pain Symptom"
+  )
   expect_equal(frag$states[["Chest Pain Symptom"]]$type, "Symptom")
 })
 
@@ -21,7 +33,10 @@ test_that("create_delay builds a Delay fragment from low/high/unit", {
   frag <- create_delay(6, 18, "months")
   expect_fragment(frag, entry = "Delay", exit = "Delay")
   expect_equal(frag$states$Delay$type, "Delay")
-  expect_equal(frag$states$Delay$range, create_component_settings("range", low = 6, high = 18, unit = "months"))
+  expect_equal(
+    frag$states$Delay$range,
+    create_component_settings("range", low = 6, high = 18, unit = "months")
+  )
 })
 
 test_that("create_delay respects a custom label", {
@@ -30,13 +45,19 @@ test_that("create_delay respects a custom label", {
 })
 
 test_that("create_guard wraps a Logic condition in a Guard fragment", {
-  frag <- create_guard(create_logic_settings("Age", operator = ">=", quantity = 18, unit = "years"))
+  frag <- create_guard(create_logic_settings(
+    "Age",
+    operator = ">=",
+    quantity = 18,
+    unit = "years"
+  ))
   expect_fragment(frag, entry = "Guard", exit = "Guard")
   expect_equal(frag$states$Guard$allow$condition_type, "Age")
 })
 
 test_that("create_population combines given demographic filters with And", {
-  frag <- create_population("Adults",
+  frag <- create_population(
+    "Adults",
     age = list(operator = ">=", quantity = 18, unit = "years"),
     gender = "F"
   )
@@ -69,13 +90,23 @@ test_that("create_condition builds onset -> encounter -> encounter-end (wellness
 })
 
 test_that("create_condition standalone diagnosis requires encounter_class", {
-  expect_error(create_condition("X", a_code(), diagnosis = "standalone"), "encounter_class")
-  frag <- create_condition("X", a_code(), diagnosis = "standalone", encounter_class = "ambulatory")
+  expect_error(
+    create_condition("X", a_code(), diagnosis = "standalone"),
+    "encounter_class"
+  )
+  frag <- create_condition(
+    "X",
+    a_code(),
+    diagnosis = "standalone",
+    encounter_class = "ambulatory"
+  )
   expect_equal(frag$states[["X Encounter"]]$encounter_class, "ambulatory")
 })
 
 test_that("create_condition wires an onset_delay in front and resolves_after behind", {
-  frag <- create_condition("X", a_code(),
+  frag <- create_condition(
+    "X",
+    a_code(),
     diagnosis = "wellness",
     onset_delay = list(low = 1, high = 3, unit = "months"),
     resolves_after = list(low = 6, high = 12, unit = "months")
@@ -95,19 +126,28 @@ test_that("create_medication defaults to chronic (long) with no end", {
 })
 
 test_that("create_medication short duration appends a course Delay -> MedicationEnd", {
-  frag <- create_medication("Metformin", another_code(),
+  frag <- create_medication(
+    "Metformin",
+    another_code(),
     condition = "Diabetes",
-    duration = "short", course = list(low = 30, high = 30, unit = "days")
+    duration = "short",
+    course = list(low = 30, high = 30, unit = "days")
   )
   expect_equal(frag$entry, "Metformin")
   expect_equal(frag$exit, "Metformin Course End")
   expect_false(frag$states$Metformin$chronic)
   expect_equal(frag$states[["Metformin Course End"]]$type, "MedicationEnd")
-  expect_equal(frag$states[["Metformin Course End"]]$medication_order, "Metformin")
+  expect_equal(
+    frag$states[["Metformin Course End"]]$medication_order,
+    "Metformin"
+  )
 })
 
 test_that("create_medication short duration requires course", {
-  expect_error(create_medication("X", a_code(), condition = "Y", duration = "short"), "course")
+  expect_error(
+    create_medication("X", a_code(), condition = "Y", duration = "short"),
+    "course"
+  )
 })
 
 test_that("create_discontinue is a bare MedicationEnd", {
@@ -120,7 +160,10 @@ test_that("create_discontinue is a bare MedicationEnd", {
 test_that("create_observation sets both the exact component and the top-level unit", {
   frag <- create_observation("HbA1c", a_code(), value = 8.5, unit = "%")
   expect_fragment(frag)
-  expect_equal(frag$states$HbA1c$exact, create_component_settings("exact", quantity = 8.5, unit = "%"))
+  expect_equal(
+    frag$states$HbA1c$exact,
+    create_component_settings("exact", quantity = 8.5, unit = "%")
+  )
   expect_equal(frag$states$HbA1c$unit, "%")
 })
 
@@ -131,14 +174,24 @@ test_that("create_observation supports value_code instead of a numeric value", {
 })
 
 test_that("create_vital_sign mirrors create_observation's value convenience", {
-  frag <- create_vital_sign("High Systolic", "Blood Pressure Systolic", value = 145, unit = "mmHg")
+  frag <- create_vital_sign(
+    "High Systolic",
+    "Blood Pressure Systolic",
+    value = 145,
+    unit = "mmHg"
+  )
   expect_fragment(frag)
-  expect_equal(frag$states[["High Systolic"]]$vital_sign, "Blood Pressure Systolic")
+  expect_equal(
+    frag$states[["High Systolic"]]$vital_sign,
+    "Blood Pressure Systolic"
+  )
   expect_equal(frag$states[["High Systolic"]]$exact$quantity, 145)
 })
 
 test_that("create_procedure supports an optional condition reason and length", {
-  frag <- create_procedure("Appendectomy", a_code(),
+  frag <- create_procedure(
+    "Appendectomy",
+    a_code(),
     condition = "Appendicitis",
     length = list(low = 30, high = 60, unit = "minutes")
   )
@@ -156,7 +209,10 @@ test_that("create_procedure omits duration when length is not given", {
 })
 
 test_that("create_death supports condition, codes, and a delay", {
-  frag <- create_death(condition = "Diabetes", after = list(low = 1, high = 10, unit = "years"))
+  frag <- create_death(
+    condition = "Diabetes",
+    after = list(low = 1, high = 10, unit = "years")
+  )
   expect_fragment(frag, entry = "Death", exit = "Death")
   expect_equal(frag$states$Death$condition_onset, "Diabetes")
   expect_equal(
@@ -172,34 +228,56 @@ test_that("create_encounter builds an Encounter/EncounterEnd pair", {
 })
 
 test_that("create_encounter standalone requires encounter_class", {
-  frag <- create_encounter("Visit", wellness = FALSE, encounter_class = "emergency")
+  frag <- create_encounter(
+    "Visit",
+    wellness = FALSE,
+    encounter_class = "emergency"
+  )
   expect_null(frag$states$Visit$wellness)
   expect_equal(frag$states$Visit$encounter_class, "emergency")
 })
 
 test_that("create_allergy without resolves_after is a single-state fragment", {
   frag <- create_allergy("Penicillin Allergy", a_code())
-  expect_fragment(frag, entry = "Penicillin Allergy", exit = "Penicillin Allergy")
+  expect_fragment(
+    frag,
+    entry = "Penicillin Allergy",
+    exit = "Penicillin Allergy"
+  )
 })
 
 test_that("create_allergy with resolves_after appends Delay -> AllergyEnd", {
-  frag <- create_allergy("Penicillin Allergy", a_code(),
+  frag <- create_allergy(
+    "Penicillin Allergy",
+    a_code(),
     resolves_after = list(low = 1, high = 2, unit = "years")
   )
   expect_equal(frag$entry, "Penicillin Allergy")
   expect_equal(frag$exit, "Penicillin Allergy Resolves")
-  expect_equal(frag$states[["Penicillin Allergy Resolves"]]$allergy_onset, "Penicillin Allergy")
+  expect_equal(
+    frag$states[["Penicillin Allergy Resolves"]]$allergy_onset,
+    "Penicillin Allergy"
+  )
 })
 
 test_that("create_careplan mirrors create_allergy's optional resolution", {
   frag <- create_careplan("Diabetes Care Plan", a_code())
-  expect_fragment(frag, entry = "Diabetes Care Plan", exit = "Diabetes Care Plan")
+  expect_fragment(
+    frag,
+    entry = "Diabetes Care Plan",
+    exit = "Diabetes Care Plan"
+  )
 
-  frag2 <- create_careplan("Diabetes Care Plan", a_code(),
+  frag2 <- create_careplan(
+    "Diabetes Care Plan",
+    a_code(),
     resolves_after = list(low = 6, high = 12, unit = "months")
   )
   expect_equal(frag2$exit, "Diabetes Care Plan Resolves")
-  expect_equal(frag2$states[["Diabetes Care Plan Resolves"]]$type, "CarePlanEnd")
+  expect_equal(
+    frag2$states[["Diabetes Care Plan Resolves"]]$type,
+    "CarePlanEnd"
+  )
 })
 
 test_that("create_vaccine defaults series to dose 1", {
@@ -224,7 +302,12 @@ test_that("create_counter defaults amount to 1 and validates action", {
   expect_equal(frag$states$Count$amount, 1)
   expect_equal(frag$states$Count$action, "increment")
 
-  frag2 <- create_counter("readings", action = "decrement", amount = 5, label = "Uncount")
+  frag2 <- create_counter(
+    "readings",
+    action = "decrement",
+    amount = 5,
+    label = "Uncount"
+  )
   expect_equal(frag2$states$Uncount$amount, 5)
 
   expect_error(create_counter("x", action = "bogus", label = "Y"))

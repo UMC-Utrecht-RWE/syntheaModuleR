@@ -9,10 +9,13 @@ test_that("direct transition returns direct_transition = to", {
 })
 
 test_that("distributed transition wraps options with transition/distribution", {
-  x <- create_transition_settings("distributed", options = list(
-    list(transition = "A", distribution = 0.6),
-    list(transition = "B", distribution = 0.4)
-  ))
+  x <- create_transition_settings(
+    "distributed",
+    options = list(
+      list(transition = "A", distribution = 0.6),
+      list(transition = "B", distribution = 0.4)
+    )
+  )
   expect_named(x, "distributed_transition")
   expect_length(x$distributed_transition, 2)
   expect_equal(x$distributed_transition[[1]]$transition, "A")
@@ -20,30 +23,48 @@ test_that("distributed transition wraps options with transition/distribution", {
 })
 
 test_that("distributed transition supports a NamedDistribution (attribute + default)", {
-  x <- create_transition_settings("distributed", options = list(
-    list(transition = "A", distribution = list(attribute = "share_a", default = 0.5)),
-    list(transition = "B", distribution = 0.5)
-  ))
-  expect_equal(x$distributed_transition[[1]]$distribution, list(attribute = "share_a", default = 0.5))
+  x <- create_transition_settings(
+    "distributed",
+    options = list(
+      list(
+        transition = "A",
+        distribution = list(attribute = "share_a", default = 0.5)
+      ),
+      list(transition = "B", distribution = 0.5)
+    )
+  )
+  expect_equal(
+    x$distributed_transition[[1]]$distribution,
+    list(attribute = "share_a", default = 0.5)
+  )
 })
 
 test_that("distributed transition options require transition and distribution", {
   expect_error(
-    create_transition_settings("distributed", options = list(list(distribution = 1))),
+    create_transition_settings(
+      "distributed",
+      options = list(list(distribution = 1))
+    ),
     "each option needs 'transition'"
   )
   expect_error(
-    create_transition_settings("distributed", options = list(list(transition = "A"))),
+    create_transition_settings(
+      "distributed",
+      options = list(list(transition = "A"))
+    ),
     "each option needs 'distribution'"
   )
 })
 
 test_that("conditional transition: condition present except on the fallback/else option", {
   cond <- create_logic_settings("Gender", gender = "F")
-  x <- create_transition_settings("conditional", options = list(
-    list(condition = cond, transition = "A"),
-    list(transition = "B")
-  ))
+  x <- create_transition_settings(
+    "conditional",
+    options = list(
+      list(condition = cond, transition = "A"),
+      list(transition = "B")
+    )
+  )
   expect_named(x, "conditional_transition")
   expect_true(!is.null(x$conditional_transition[[1]]$condition))
   expect_null(x$conditional_transition[[2]]$condition)
@@ -51,20 +72,28 @@ test_that("conditional transition: condition present except on the fallback/else
 
 test_that("conditional transition options require transition", {
   expect_error(
-    create_transition_settings("conditional", options = list(list(condition = create_logic_settings("True")))),
+    create_transition_settings(
+      "conditional",
+      options = list(list(condition = create_logic_settings("True")))
+    ),
     "each option needs 'transition'"
   )
 })
 
 test_that("complex transition: each option is either a direct transition or a nested distributed one", {
   cond <- create_logic_settings("Gender", gender = "F")
-  x <- create_transition_settings("complex", options = list(
-    list(condition = cond, transition = "A"),
-    list(distributions = list(
-      list(transition = "B", distribution = 0.5),
-      list(transition = "C", distribution = 0.5)
-    ))
-  ))
+  x <- create_transition_settings(
+    "complex",
+    options = list(
+      list(condition = cond, transition = "A"),
+      list(
+        distributions = list(
+          list(transition = "B", distribution = 0.5),
+          list(transition = "C", distribution = 0.5)
+        )
+      )
+    )
+  )
   expect_named(x, "complex_transition")
   expect_equal(x$complex_transition[[1]]$transition, "A")
   expect_length(x$complex_transition[[2]]$distributions, 2)
@@ -72,28 +101,39 @@ test_that("complex transition: each option is either a direct transition or a ne
 
 test_that("complex transition option needs exactly one of transition/distributions", {
   expect_error(
-    create_transition_settings("complex", options = list(list(condition = create_logic_settings("True")))),
+    create_transition_settings(
+      "complex",
+      options = list(list(condition = create_logic_settings("True")))
+    ),
     "exactly one of"
   )
   expect_error(
-    create_transition_settings("complex", options = list(list(
-      transition = "A",
-      distributions = list(list(transition = "B", distribution = 1))
-    ))),
+    create_transition_settings(
+      "complex",
+      options = list(list(
+        transition = "A",
+        distributions = list(list(transition = "B", distribution = 1))
+      ))
+    ),
     "exactly one of"
   )
 })
 
 test_that("lookup_table transition requires lookup_table_name and default_probability per option", {
-  x <- create_transition_settings("lookup_table", lookup_table_name = "risk.csv", options = list(
-    list(transition = "A", default_probability = 0.5),
-    list(transition = "B", default_probability = 0.5)
-  ))
+  x <- create_transition_settings(
+    "lookup_table",
+    lookup_table_name = "risk.csv",
+    options = list(
+      list(transition = "A", default_probability = 0.5),
+      list(transition = "B", default_probability = 0.5)
+    )
+  )
   expect_named(x, "lookup_table_transition")
   expect_equal(x$lookup_table_transition[[1]]$lookup_table_name, "risk.csv")
 
   expect_error(
-    create_transition_settings("lookup_table",
+    create_transition_settings(
+      "lookup_table",
       lookup_table_name = "risk.csv",
       options = list(list(transition = "A"))
     ),
@@ -102,13 +142,22 @@ test_that("lookup_table transition requires lookup_table_name and default_probab
 })
 
 test_that("type_of_care transition requires ambulatory/telemedicine/emergency", {
-  x <- create_transition_settings("type_of_care",
+  x <- create_transition_settings(
+    "type_of_care",
     ambulatory = "A",
-    telemedicine = "T", emergency = "E"
+    telemedicine = "T",
+    emergency = "E"
   )
-  expect_equal(x, list(type_of_care_transition = list(
-    ambulatory = "A", telemedicine = "T", emergency = "E"
-  )))
+  expect_equal(
+    x,
+    list(
+      type_of_care_transition = list(
+        ambulatory = "A",
+        telemedicine = "T",
+        emergency = "E"
+      )
+    )
+  )
   expect_error(
     create_transition_settings("type_of_care", ambulatory = "A"),
     "missing required field"
@@ -121,7 +170,10 @@ test_that("unknown transition kind errors", {
 
 test_that("array-rule violation surfaces for transition options", {
   expect_error(
-    create_transition_settings("distributed", options = list(transition = "A", distribution = 1)),
+    create_transition_settings(
+      "distributed",
+      options = list(transition = "A", distribution = 1)
+    ),
     "looks like a single item"
   )
 })

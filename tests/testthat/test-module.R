@@ -21,9 +21,13 @@ test_that("build_module(as_json = FALSE) returns the R list instead", {
 })
 
 test_that("build_module records specialty/remarks/gmf_version when given", {
-  lst <- build_module("X", minimal_states(),
+  lst <- build_module(
+    "X",
+    minimal_states(),
     specialty = "Cardiology",
-    remarks = c("note one", "note two"), gmf_version = 3, as_json = FALSE
+    remarks = c("note one", "note two"),
+    gmf_version = 3,
+    as_json = FALSE
   )
   expect_equal(lst$specialty, "Cardiology")
   expect_equal(lst$remarks, list("note one", "note two"))
@@ -68,19 +72,31 @@ test_that("validate_module rejects a module with no states", {
 test_that("validate_module requires exactly one state named 'Initial'", {
   states <- minimal_states()
   states[["Initial"]] <- NULL
-  expect_error(validate_module(list(states = states)), "exactly one state named 'Initial'")
+  expect_error(
+    validate_module(list(states = states)),
+    "exactly one state named 'Initial'"
+  )
 
   dup <- minimal_states()
   # A named list can carry duplicate names in R -- exercise that edge case directly.
   dup2 <- c(dup, list(Initial = dup$Initial))
-  expect_error(validate_module(list(states = dup2)), "exactly one state named 'Initial'")
+  expect_error(
+    validate_module(list(states = dup2)),
+    "exactly one state named 'Initial'"
+  )
 })
 
 test_that("validate_module requires at least one Terminal-typed state", {
-  states <- list(Initial = create_state_settings("Initial",
-    transition = create_transition_settings("direct", to = "Initial")
-  ))
-  expect_error(validate_module(list(states = states)), "no state of type 'Terminal'")
+  states <- list(
+    Initial = create_state_settings(
+      "Initial",
+      transition = create_transition_settings("direct", to = "Initial")
+    )
+  )
+  expect_error(
+    validate_module(list(states = states)),
+    "no state of type 'Terminal'"
+  )
 })
 
 test_that("validate_module requires every state to have a type", {
@@ -95,8 +111,14 @@ test_that("validate_module requires exactly one transition property per non-Term
   expect_error(validate_module(list(states = states)), "no transition property")
 
   states2 <- minimal_states()
-  states2$Initial$distributed_transition <- list(list(transition = "Terminal", distribution = 1))
-  expect_error(validate_module(list(states = states2)), "more than one transition property")
+  states2$Initial$distributed_transition <- list(list(
+    transition = "Terminal",
+    distribution = 1
+  ))
+  expect_error(
+    validate_module(list(states = states2)),
+    "more than one transition property"
+  )
 })
 
 test_that("validate_module catches undefined state-name references across every reference kind", {
@@ -107,7 +129,10 @@ test_that("validate_module catches undefined state-name references across every 
   expect_error(validate_module(list(states = s)), "Nowhere")
 
   s <- base()
-  s$Initial$distributed_transition <- list(list(transition = "Nowhere", distribution = 1))
+  s$Initial$distributed_transition <- list(list(
+    transition = "Nowhere",
+    distribution = 1
+  ))
   s$Initial$direct_transition <- NULL
   expect_error(validate_module(list(states = s)), "Nowhere")
 
@@ -122,7 +147,9 @@ test_that("validate_module catches undefined state-name references across every 
   expect_error(validate_module(list(states = s)), "Nowhere")
 
   s <- base()
-  s$Initial$complex_transition <- list(list(distributions = list(list(transition = "Nowhere", distribution = 1))))
+  s$Initial$complex_transition <- list(list(
+    distributions = list(list(transition = "Nowhere", distribution = 1))
+  ))
   s$Initial$direct_transition <- NULL
   expect_error(validate_module(list(states = s)), "Nowhere")
 
@@ -153,45 +180,69 @@ test_that("validate_module catches undefined state-name references across every 
 
 test_that("validate_module passes a graph exercising every transition kind's references", {
   states <- list(
-    Initial = create_state_settings("Initial",
+    Initial = create_state_settings(
+      "Initial",
       transition = create_transition_settings("direct", to = "Onset")
     ),
-    Onset = create_state_settings("ConditionOnset",
-      codes = list(a_code()), target_encounter = "Enc",
+    Onset = create_state_settings(
+      "ConditionOnset",
+      codes = list(a_code()),
+      target_encounter = "Enc",
       transition = create_transition_settings("direct", to = "Enc")
     ),
-    Enc = create_state_settings("Encounter",
+    Enc = create_state_settings(
+      "Encounter",
       wellness = TRUE,
-      transition = create_transition_settings("distributed", options = list(
-        list(transition = "Med", distribution = 0.5),
-        list(transition = "Device1", distribution = 0.5)
-      ))
+      transition = create_transition_settings(
+        "distributed",
+        options = list(
+          list(transition = "Med", distribution = 0.5),
+          list(transition = "Device1", distribution = 0.5)
+        )
+      )
     ),
-    Med = create_state_settings("MedicationOrder",
-      codes = list(another_code()), reason = "Onset",
-      transition = create_transition_settings("conditional", options = list(
-        list(condition = create_logic_settings("True"), transition = "Care"),
-        list(transition = "Device1")
-      ))
+    Med = create_state_settings(
+      "MedicationOrder",
+      codes = list(another_code()),
+      reason = "Onset",
+      transition = create_transition_settings(
+        "conditional",
+        options = list(
+          list(condition = create_logic_settings("True"), transition = "Care"),
+          list(transition = "Device1")
+        )
+      )
     ),
-    Care = create_state_settings("CarePlanStart",
+    Care = create_state_settings(
+      "CarePlanStart",
       codes = list(a_code()),
-      transition = create_transition_settings("complex", options = list(
-        list(condition = create_logic_settings("True"), transition = "Device1"),
-        list(distributions = list(
-          list(transition = "Device1", distribution = 1)
-        ))
-      ))
+      transition = create_transition_settings(
+        "complex",
+        options = list(
+          list(
+            condition = create_logic_settings("True"),
+            transition = "Device1"
+          ),
+          list(
+            distributions = list(
+              list(transition = "Device1", distribution = 1)
+            )
+          )
+        )
+      )
     ),
-    Device1 = create_state_settings("Device",
+    Device1 = create_state_settings(
+      "Device",
       code = a_code(),
       transition = create_transition_settings("direct", to = "DeviceEnd1")
     ),
-    DeviceEnd1 = create_state_settings("DeviceEnd",
+    DeviceEnd1 = create_state_settings(
+      "DeviceEnd",
       device = "Device1",
       transition = create_transition_settings("direct", to = "AllergyOnset1")
     ),
-    AllergyOnset1 = create_state_settings("AllergyOnset",
+    AllergyOnset1 = create_state_settings(
+      "AllergyOnset",
       codes = list(a_code()),
       transition = create_transition_settings("direct", to = "Terminal")
     ),
@@ -227,14 +278,21 @@ test_that("write_module_json accepts an R-list module and re-validates it", {
 })
 
 test_that("write_module_json rejects anything else", {
-  expect_error(write_module_json(42, tempfile()), "must be a JSON string or a module list")
+  expect_error(
+    write_module_json(42, tempfile()),
+    "must be a JSON string or a module list"
+  )
 })
 
 # build_disease_module() ----
 
 test_that("build_disease_module builds a minimal wellness-diagnosed chronic condition module", {
   code <- a_code()
-  m <- build_disease_module("Hypertension", condition_code = code, diagnosis = "wellness")
+  m <- build_disease_module(
+    "Hypertension",
+    condition_code = code,
+    diagnosis = "wellness"
+  )
   expect_true(validate_module(m))
   expect_true("Condition Onset" %in% names(m$states))
   expect_equal(m$states[["Condition Onset"]]$codes[[1]], code)
@@ -244,19 +302,27 @@ test_that("build_disease_module builds a minimal wellness-diagnosed chronic cond
 
 test_that("build_disease_module standalone diagnosis requires encounter_class", {
   expect_error(
-    build_disease_module("X", condition_code = a_code(), diagnosis = "standalone"),
+    build_disease_module(
+      "X",
+      condition_code = a_code(),
+      diagnosis = "standalone"
+    ),
     "encounter_class is required"
   )
-  m <- build_disease_module("X",
-    condition_code = a_code(), diagnosis = "standalone",
+  m <- build_disease_module(
+    "X",
+    condition_code = a_code(),
+    diagnosis = "standalone",
     encounter_class = "ambulatory"
   )
   expect_equal(m$states[["Diagnosis Encounter"]]$encounter_class, "ambulatory")
 })
 
 test_that("build_disease_module wires an age_gate and onset_delay in front of onset", {
-  m <- build_disease_module("X",
-    condition_code = a_code(), diagnosis = "wellness",
+  m <- build_disease_module(
+    "X",
+    condition_code = a_code(),
+    diagnosis = "wellness",
     age_gate = list(operator = ">=", quantity = 40, unit = "years"),
     onset_delay = list(low = 1, high = 5, unit = "years")
   )
@@ -268,20 +334,30 @@ test_that("build_disease_module wires an age_gate and onset_delay in front of on
 })
 
 test_that("build_disease_module wires resolves_after into a Delay -> ConditionEnd tail", {
-  m <- build_disease_module("X",
-    condition_code = a_code(), diagnosis = "wellness",
+  m <- build_disease_module(
+    "X",
+    condition_code = a_code(),
+    diagnosis = "wellness",
     resolves_after = list(low = 6, high = 12, unit = "months")
   )
   expect_true(validate_module(m))
-  expect_equal(m$states[["End Encounter"]]$direct_transition, "Condition Resolves Delay")
+  expect_equal(
+    m$states[["End Encounter"]]$direct_transition,
+    "Condition Resolves Delay"
+  )
   expect_equal(m$states[["Condition Resolves"]]$type, "ConditionEnd")
-  expect_equal(m$states[["Condition Resolves"]]$condition_onset, "Condition Onset")
+  expect_equal(
+    m$states[["Condition Resolves"]]$condition_onset,
+    "Condition Onset"
+  )
   expect_equal(m$states[["Condition Resolves"]]$direct_transition, "Terminal")
 })
 
 test_that("build_disease_module wires a death branch as a distributed transition off EncounterEnd", {
-  m <- build_disease_module("X",
-    condition_code = a_code(), diagnosis = "wellness",
+  m <- build_disease_module(
+    "X",
+    condition_code = a_code(),
+    diagnosis = "wellness",
     death = list(probability = 0.3)
   )
   expect_true(validate_module(m))
@@ -294,32 +370,42 @@ test_that("build_disease_module wires a death branch as a distributed transition
 
 test_that("build_disease_module validates the death probability is in (0, 1]", {
   expect_error(
-    build_disease_module("X",
-      condition_code = a_code(), diagnosis = "wellness",
+    build_disease_module(
+      "X",
+      condition_code = a_code(),
+      diagnosis = "wellness",
       death = list(probability = 0)
     )
   )
   expect_error(
-    build_disease_module("X",
-      condition_code = a_code(), diagnosis = "wellness",
+    build_disease_module(
+      "X",
+      condition_code = a_code(),
+      diagnosis = "wellness",
       death = list(probability = 1.5)
     )
   )
   expect_true(validate_module(
-    build_disease_module("X",
-      condition_code = a_code(), diagnosis = "wellness",
+    build_disease_module(
+      "X",
+      condition_code = a_code(),
+      diagnosis = "wellness",
       death = list(probability = 1)
     )
   ))
 })
 
 test_that("build_disease_module accepts an explicit death code instead of condition_onset", {
-  death_code <- create_component_settings("code",
-    system = "SNOMED-CT", code = "1",
+  death_code <- create_component_settings(
+    "code",
+    system = "SNOMED-CT",
+    code = "1",
     display = "Death by X"
   )
-  m <- build_disease_module("X",
-    condition_code = a_code(), diagnosis = "wellness",
+  m <- build_disease_module(
+    "X",
+    condition_code = a_code(),
+    diagnosis = "wellness",
     death = list(probability = 0.1, code = death_code)
   )
   expect_equal(m$states[["Death"]]$codes[[1]], death_code)

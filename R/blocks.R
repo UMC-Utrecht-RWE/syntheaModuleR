@@ -43,10 +43,16 @@
 #' )
 #' @export
 create_step <- function(type, ..., label) {
-  state <- do.call(create_state_settings, c(
-    list(type = type), list(...),
-    list(transition = create_transition_settings("direct", to = "__PENDING__"))
-  ))
+  state <- do.call(
+    create_state_settings,
+    c(
+      list(type = type),
+      list(...),
+      list(
+        transition = create_transition_settings("direct", to = "__PENDING__")
+      )
+    )
+  )
   list(states = .named_list(list(state), label), entry = label, exit = label)
 }
 
@@ -64,8 +70,14 @@ create_step <- function(type, ..., label) {
 #' create_delay(low = 6, high = 18, unit = "months")
 #' @export
 create_delay <- function(low, high, unit, label = "Delay") {
-  create_step("Delay",
-    range = create_component_settings("range", low = low, high = high, unit = unit),
+  create_step(
+    "Delay",
+    range = create_component_settings(
+      "range",
+      low = low,
+      high = high,
+      unit = unit
+    ),
     label = label
   )
 }
@@ -82,7 +94,8 @@ create_delay <- function(low, high, unit, label = "Delay") {
 #' create_guard(create_logic_settings("Age", operator = ">=", quantity = 18, unit = "years"))
 #' @export
 create_guard <- function(condition, label = "Guard") {
-  state <- create_state_settings("Guard",
+  state <- create_state_settings(
+    "Guard",
     allow = condition,
     transition = create_transition_settings("direct", to = "__PENDING__")
   )
@@ -111,29 +124,56 @@ create_guard <- function(condition, label = "Guard") {
 #' @examples
 #' create_population("Adult Filter", age = list(operator = ">=", quantity = 18, unit = "years"))
 #' @export
-create_population <- function(label, age = NULL, gender = NULL, race = NULL, socioeconomic = NULL) {
+create_population <- function(
+  label,
+  age = NULL,
+  gender = NULL,
+  race = NULL,
+  socioeconomic = NULL
+) {
   conditions <- list()
   if (!is.null(age)) {
-    conditions <- c(conditions, list(create_logic_settings("Age",
-      operator = age$operator,
-      quantity = age$quantity, unit = age$unit
-    )))
+    conditions <- c(
+      conditions,
+      list(create_logic_settings(
+        "Age",
+        operator = age$operator,
+        quantity = age$quantity,
+        unit = age$unit
+      ))
+    )
   }
   if (!is.null(gender)) {
-    conditions <- c(conditions, list(create_logic_settings("Gender", gender = gender)))
+    conditions <- c(
+      conditions,
+      list(create_logic_settings("Gender", gender = gender))
+    )
   }
   if (!is.null(race)) {
-    conditions <- c(conditions, list(create_logic_settings("Race", race = race)))
+    conditions <- c(
+      conditions,
+      list(create_logic_settings("Race", race = race))
+    )
   }
   if (!is.null(socioeconomic)) {
     socioeconomic <- match.arg(socioeconomic, c("High", "Middle", "Low"))
-    conditions <- c(conditions, list(create_logic_settings("SocioeconomicStatus", category = socioeconomic)))
+    conditions <- c(
+      conditions,
+      list(create_logic_settings(
+        "SocioeconomicStatus",
+        category = socioeconomic
+      ))
+    )
   }
 
   if (length(conditions) == 0) {
     return(NULL)
   }
-  condition <- if (length(conditions) == 1) conditions[[1]] else create_logic_settings("And", conditions = conditions)
+  condition <- if (length(conditions) == 1) {
+    conditions[[1]]
+  } else {
+    create_logic_settings("And", conditions = conditions)
+  }
   create_guard(condition, label = label)
 }
 
@@ -162,28 +202,55 @@ create_population <- function(label, age = NULL, gender = NULL, race = NULL, soc
 #' )
 #' create_condition("Diabetes", diabetes, diagnosis = "wellness")
 #' @export
-create_condition <- function(label, code, diagnosis = c("wellness", "standalone"), encounter_class = NULL,
-                             onset_delay = NULL, resolves_after = NULL) {
+create_condition <- function(
+  label,
+  code,
+  diagnosis = c("wellness", "standalone"),
+  encounter_class = NULL,
+  onset_delay = NULL,
+  resolves_after = NULL
+) {
   diagnosis <- match.arg(diagnosis)
-  if (identical(diagnosis, "standalone") && (is.null(encounter_class) || !nzchar(encounter_class))) {
-    stop("create_condition(): `encounter_class` is required when diagnosis = \"standalone\"")
+  if (
+    identical(diagnosis, "standalone") &&
+      (is.null(encounter_class) || !nzchar(encounter_class))
+  ) {
+    stop(
+      "create_condition(): `encounter_class` is required when diagnosis = \"standalone\""
+    )
   }
 
   encounter_label <- paste0(label, " Encounter")
   encounter_end_label <- paste0(label, " Encounter End")
 
-  onset_state <- create_state_settings("ConditionOnset",
-    codes = list(code), target_encounter = encounter_label,
+  onset_state <- create_state_settings(
+    "ConditionOnset",
+    codes = list(code),
+    target_encounter = encounter_label,
     transition = create_transition_settings("direct", to = encounter_label)
   )
 
-  encounter_fields <- if (identical(diagnosis, "wellness")) list(wellness = TRUE) else list(encounter_class = encounter_class)
-  encounter_state <- do.call(create_state_settings, c(
-    list(type = "Encounter"), encounter_fields,
-    list(transition = create_transition_settings("direct", to = encounter_end_label))
-  ))
+  encounter_fields <- if (identical(diagnosis, "wellness")) {
+    list(wellness = TRUE)
+  } else {
+    list(encounter_class = encounter_class)
+  }
+  encounter_state <- do.call(
+    create_state_settings,
+    c(
+      list(type = "Encounter"),
+      encounter_fields,
+      list(
+        transition = create_transition_settings(
+          "direct",
+          to = encounter_end_label
+        )
+      )
+    )
+  )
 
-  encounter_end_state <- create_state_settings("EncounterEnd",
+  encounter_end_state <- create_state_settings(
+    "EncounterEnd",
     transition = create_transition_settings("direct", to = "__PENDING__")
   )
 
@@ -197,16 +264,26 @@ create_condition <- function(label, code, diagnosis = c("wellness", "standalone"
   )
 
   if (!is.null(onset_delay)) {
-    delay <- create_delay(onset_delay$low, onset_delay$high, onset_delay$unit,
+    delay <- create_delay(
+      onset_delay$low,
+      onset_delay$high,
+      onset_delay$unit,
       label = paste0(label, " Onset Delay")
     )
     fragment <- chain(delay, fragment)
   }
   if (!is.null(resolves_after)) {
-    resolve_delay <- create_delay(resolves_after$low, resolves_after$high, resolves_after$unit,
+    resolve_delay <- create_delay(
+      resolves_after$low,
+      resolves_after$high,
+      resolves_after$unit,
       label = paste0(label, " Resolves Delay")
     )
-    resolve_end <- create_step("ConditionEnd", condition_onset = label, label = paste0(label, " Resolves"))
+    resolve_end <- create_step(
+      "ConditionEnd",
+      condition_onset = label,
+      label = paste0(label, " Resolves")
+    )
     fragment <- chain(fragment, resolve_delay, resolve_end)
   }
   fragment
@@ -230,24 +307,46 @@ create_condition <- function(label, code, diagnosis = c("wellness", "standalone"
 #'   system = "RxNorm", code = "860975",
 #'   display = "Metformin hydrochloride 500 MG Oral Tablet"
 #' )
-#' create_medication("Metformin", metformin, condition = "Diabetes", duration = "long")
+#' create_medication("Metformin",
+#' metformin, condition = "Diabetes", duration = "long")
 #' @export
-create_medication <- function(label, code, condition, duration = c("long", "short"), course = NULL) {
+create_medication <- function(
+  label,
+  code,
+  condition,
+  duration = c("long", "short"),
+  course = NULL
+) {
   duration <- match.arg(duration)
   if (identical(duration, "short") && is.null(course)) {
     stop("create_medication(): `course` is required when duration = \"short\"")
   }
 
-  order_state <- create_state_settings("MedicationOrder",
-    codes = list(code), reason = condition,
+  order_state <- create_state_settings(
+    "MedicationOrder",
+    codes = list(code),
+    reason = condition,
     chronic = identical(duration, "long"),
     transition = create_transition_settings("direct", to = "__PENDING__")
   )
-  fragment <- list(states = .named_list(list(order_state), label), entry = label, exit = label)
+  fragment <- list(
+    states = .named_list(list(order_state), label),
+    entry = label,
+    exit = label
+  )
 
   if (identical(duration, "short")) {
-    delay <- create_delay(course$low, course$high, course$unit, label = paste0(label, " Course"))
-    end <- create_step("MedicationEnd", medication_order = label, label = paste0(label, " Course End"))
+    delay <- create_delay(
+      course$low,
+      course$high,
+      course$unit,
+      label = paste0(label, " Course")
+    )
+    end <- create_step(
+      "MedicationEnd",
+      medication_order = label,
+      label = paste0(label, " Course End")
+    )
     fragment <- chain(fragment, delay, end)
   }
   fragment
@@ -289,10 +388,24 @@ create_discontinue <- function(label, medication) {
 #' )
 #' create_observation("HbA1c Reading", hba1c, value = 8.5, unit = "%")
 #' @export
-create_observation <- function(label, code, value = NULL, value_code = NULL, unit = NULL) {
-  exact <- if (!is.null(value)) create_component_settings("exact", quantity = value, unit = unit) else NULL
-  create_step("Observation",
-    codes = list(code), exact = exact, value_code = value_code, unit = unit,
+create_observation <- function(
+  label,
+  code,
+  value = NULL,
+  value_code = NULL,
+  unit = NULL
+) {
+  exact <- if (!is.null(value)) {
+    create_component_settings("exact", quantity = value, unit = unit)
+  } else {
+    NULL
+  }
+  create_step(
+    "Observation",
+    codes = list(code),
+    exact = exact,
+    value_code = value_code,
+    unit = unit,
     label = label
   )
 }
@@ -314,8 +427,18 @@ create_observation <- function(label, code, value = NULL, value_code = NULL, uni
 #' create_vital_sign("High Systolic BP", "Blood Pressure Systolic", value = 145, unit = "mmHg")
 #' @export
 create_vital_sign <- function(label, vital_sign, value = NULL, unit = NULL) {
-  exact <- if (!is.null(value)) create_component_settings("exact", quantity = value, unit = unit) else NULL
-  create_step("VitalSign", vital_sign = vital_sign, exact = exact, unit = unit, label = label)
+  exact <- if (!is.null(value)) {
+    create_component_settings("exact", quantity = value, unit = unit)
+  } else {
+    NULL
+  }
+  create_step(
+    "VitalSign",
+    vital_sign = vital_sign,
+    exact = exact,
+    unit = unit,
+    label = label
+  )
 }
 
 #' A procedure, as a fragment
@@ -332,19 +455,27 @@ create_vital_sign <- function(label, vital_sign, value = NULL, unit = NULL) {
 #' @return A fragment.
 #' @examples
 #' appendectomy <- create_component_settings("code",
-#'   system = "SNOMED-CT", code = "80146002",
+#'system = "SNOMED-CT", code = "80146002",
 #'   display = "Appendectomy"
 #' )
 #' create_procedure("Appendectomy", appendectomy)
 #' @export
 create_procedure <- function(label, code, condition = NULL, length = NULL) {
   duration_component <- if (!is.null(length)) {
-    create_component_settings("range", low = length$low, high = length$high, unit = length$unit)
+    create_component_settings(
+      "range",
+      low = length$low,
+      high = length$high,
+      unit = length$unit
+    )
   } else {
     NULL
   }
-  create_step("Procedure",
-    codes = list(code), reason = condition, duration = duration_component,
+  create_step(
+    "Procedure",
+    codes = list(code),
+    reason = condition,
+    duration = duration_component,
     label = label
   )
 }
@@ -364,13 +495,29 @@ create_procedure <- function(label, code, condition = NULL, length = NULL) {
 #' @examples
 #' create_death(condition = "Diabetes", after = list(low = 1, high = 10, unit = "years"))
 #' @export
-create_death <- function(label = "Death", condition = NULL, codes = NULL, after = NULL) {
+create_death <- function(
+  label = "Death",
+  condition = NULL,
+  codes = NULL,
+  after = NULL
+) {
   range_component <- if (!is.null(after)) {
-    create_component_settings("range", low = after$low, high = after$high, unit = after$unit)
+    create_component_settings(
+      "range",
+      low = after$low,
+      high = after$high,
+      unit = after$unit
+    )
   } else {
     NULL
   }
-  create_step("Death", condition_onset = condition, codes = codes, range = range_component, label = label)
+  create_step(
+    "Death",
+    condition_onset = condition,
+    codes = codes,
+    range = range_component,
+    label = label
+  )
 }
 
 #' A standalone visit not tied to a new diagnosis, as a fragment
@@ -389,12 +536,21 @@ create_death <- function(label = "Death", condition = NULL, codes = NULL, after 
 create_encounter <- function(label, wellness = TRUE, encounter_class = NULL) {
   end_label <- paste0(label, " End")
   wellness_field <- if (isTRUE(wellness)) TRUE else NULL
-  start_state <- create_state_settings("Encounter",
-    wellness = wellness_field, encounter_class = encounter_class,
+  start_state <- create_state_settings(
+    "Encounter",
+    wellness = wellness_field,
+    encounter_class = encounter_class,
     transition = create_transition_settings("direct", to = end_label)
   )
-  end_state <- create_state_settings("EncounterEnd", transition = create_transition_settings("direct", to = "__PENDING__"))
-  list(states = .named_list(list(start_state, end_state), c(label, end_label)), entry = label, exit = end_label)
+  end_state <- create_state_settings(
+    "EncounterEnd",
+    transition = create_transition_settings("direct", to = "__PENDING__")
+  )
+  list(
+    states = .named_list(list(start_state, end_state), c(label, end_label)),
+    entry = label,
+    exit = end_label
+  )
 }
 
 #' An allergy onset (+ optional resolution), as a fragment
@@ -413,19 +569,36 @@ create_encounter <- function(label, wellness = TRUE, encounter_class = NULL) {
 #' )
 #' create_allergy("Penicillin Allergy", penicillin)
 #' @export
-create_allergy <- function(label, code, allergy_type = NULL, category = NULL, reactions = NULL,
-                           resolves_after = NULL) {
-  onset <- create_step("AllergyOnset",
-    codes = list(code), allergy_type = allergy_type, category = category,
-    reactions = reactions, label = label
+create_allergy <- function(
+  label,
+  code,
+  allergy_type = NULL,
+  category = NULL,
+  reactions = NULL,
+  resolves_after = NULL
+) {
+  onset <- create_step(
+    "AllergyOnset",
+    codes = list(code),
+    allergy_type = allergy_type,
+    category = category,
+    reactions = reactions,
+    label = label
   )
   if (is.null(resolves_after)) {
     return(onset)
   }
-  delay <- create_delay(resolves_after$low, resolves_after$high, resolves_after$unit,
+  delay <- create_delay(
+    resolves_after$low,
+    resolves_after$high,
+    resolves_after$unit,
     label = paste0(label, " Resolves Delay")
   )
-  end <- create_step("AllergyEnd", allergy_onset = label, label = paste0(label, " Resolves"))
+  end <- create_step(
+    "AllergyEnd",
+    allergy_onset = label,
+    label = paste0(label, " Resolves")
+  )
   chain(onset, delay, end)
 }
 
@@ -445,18 +618,36 @@ create_allergy <- function(label, code, allergy_type = NULL, category = NULL, re
 #' )
 #' create_careplan("Diabetes Care Plan", diabetes_care)
 #' @export
-create_careplan <- function(label, code, activities = NULL, goals = NULL, reason = NULL, resolves_after = NULL) {
-  start <- create_step("CarePlanStart",
-    codes = list(code), activities = activities, goals = goals,
-    reason = reason, label = label
+create_careplan <- function(
+  label,
+  code,
+  activities = NULL,
+  goals = NULL,
+  reason = NULL,
+  resolves_after = NULL
+) {
+  start <- create_step(
+    "CarePlanStart",
+    codes = list(code),
+    activities = activities,
+    goals = goals,
+    reason = reason,
+    label = label
   )
   if (is.null(resolves_after)) {
     return(start)
   }
-  delay <- create_delay(resolves_after$low, resolves_after$high, resolves_after$unit,
+  delay <- create_delay(
+    resolves_after$low,
+    resolves_after$high,
+    resolves_after$unit,
     label = paste0(label, " Resolves Delay")
   )
-  end <- create_step("CarePlanEnd", careplan = label, label = paste0(label, " Resolves"))
+  end <- create_step(
+    "CarePlanEnd",
+    careplan = label,
+    label = paste0(label, " Resolves")
+  )
   chain(start, delay, end)
 }
 
@@ -494,7 +685,12 @@ create_vaccine <- function(label, code, series = 1) {
 #' create_tag("Treated", attribute = "diabetes_cohort", value = "treated")
 #' @export
 create_tag <- function(label, attribute, value) {
-  create_step("SetAttribute", attribute = attribute, value = value, label = label)
+  create_step(
+    "SetAttribute",
+    attribute = attribute,
+    value = value,
+    label = label
+  )
 }
 
 #' Bump a numeric attribute up or down, as a fragment
@@ -511,7 +707,18 @@ create_tag <- function(label, attribute, value) {
 #' @examples
 #' create_counter("qualifying_readings", action = "increment", label = "Count Qualifying Reading")
 #' @export
-create_counter <- function(attribute, action = c("increment", "decrement"), amount = 1, label) {
+create_counter <- function(
+  attribute,
+  action = c("increment", "decrement"),
+  amount = 1,
+  label
+) {
   action <- match.arg(action)
-  create_step("Counter", attribute = attribute, action = action, amount = amount, label = label)
+  create_step(
+    "Counter",
+    attribute = attribute,
+    action = action,
+    amount = amount,
+    label = label
+  )
 }

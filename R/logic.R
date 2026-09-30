@@ -6,7 +6,8 @@
   Gender = list(required = c("gender"), optional = c()),
   Age = list(required = c("quantity", "unit", "operator"), optional = c()),
   Date = list(
-    required = c("operator"), optional = c("year", "month", "date"),
+    required = c("operator"),
+    optional = c("year", "month", "date"),
     one_of = list(list(fields = c("year", "month", "date"), required = TRUE))
   ),
   SocioeconomicStatus = list(required = c("category"), optional = c()),
@@ -16,38 +17,79 @@
     required = c("operator"),
     optional = c("codes", "referenced_by_attribute", "value", "value_code"),
     array = c("codes"),
-    one_of = list(list(fields = c("codes", "referenced_by_attribute"), required = TRUE))
+    one_of = list(list(
+      fields = c("codes", "referenced_by_attribute"),
+      required = TRUE
+    ))
   ),
-  Attribute = list(required = c("attribute", "operator", "value"), optional = c()),
-  And = list(required = c("conditions"), optional = c(), array = c("conditions")),
-  Or = list(required = c("conditions"), optional = c(), array = c("conditions")),
+  Attribute = list(
+    required = c("attribute", "operator", "value"),
+    optional = c()
+  ),
+  And = list(
+    required = c("conditions"),
+    optional = c(),
+    array = c("conditions")
+  ),
+  Or = list(
+    required = c("conditions"),
+    optional = c(),
+    array = c("conditions")
+  ),
   Not = list(required = c("condition"), optional = c()),
-  AtLeast = list(required = c("conditions", "minimum"), optional = c(), array = c("conditions")),
-  AtMost = list(required = c("conditions", "maximum"), optional = c(), array = c("conditions")),
+  AtLeast = list(
+    required = c("conditions", "minimum"),
+    optional = c(),
+    array = c("conditions")
+  ),
+  AtMost = list(
+    required = c("conditions", "maximum"),
+    optional = c(),
+    array = c("conditions")
+  ),
   True = list(required = c(), optional = c()),
   False = list(required = c(), optional = c()),
   PriorState = list(required = c("name"), optional = c("since", "within")),
   ActiveCondition = list(
-    required = c(), optional = c("codes", "referenced_by_attribute"),
+    required = c(),
+    optional = c("codes", "referenced_by_attribute"),
     array = c("codes"),
-    one_of = list(list(fields = c("codes", "referenced_by_attribute"), required = TRUE))
+    one_of = list(list(
+      fields = c("codes", "referenced_by_attribute"),
+      required = TRUE
+    ))
   ),
   ActiveAllergy = list(
-    required = c(), optional = c("codes", "referenced_by_attribute"),
+    required = c(),
+    optional = c("codes", "referenced_by_attribute"),
     array = c("codes"),
-    one_of = list(list(fields = c("codes", "referenced_by_attribute"), required = TRUE))
+    one_of = list(list(
+      fields = c("codes", "referenced_by_attribute"),
+      required = TRUE
+    ))
   ),
   ActiveMedication = list(
-    required = c(), optional = c("codes", "referenced_by_attribute"),
+    required = c(),
+    optional = c("codes", "referenced_by_attribute"),
     array = c("codes"),
-    one_of = list(list(fields = c("codes", "referenced_by_attribute"), required = TRUE))
+    one_of = list(list(
+      fields = c("codes", "referenced_by_attribute"),
+      required = TRUE
+    ))
   ),
   ActiveCarePlan = list(
-    required = c(), optional = c("codes", "referenced_by_attribute"),
+    required = c(),
+    optional = c("codes", "referenced_by_attribute"),
     array = c("codes"),
-    one_of = list(list(fields = c("codes", "referenced_by_attribute"), required = TRUE))
+    one_of = list(list(
+      fields = c("codes", "referenced_by_attribute"),
+      required = TRUE
+    ))
   ),
-  VitalSign = list(required = c("vital_sign", "operator", "value"), optional = c())
+  VitalSign = list(
+    required = c("vital_sign", "operator", "value"),
+    optional = c()
+  )
 )
 
 #' Build a Logic condition settings object (Logic.java).
@@ -75,30 +117,32 @@
 #'   create_logic_settings("Age", operator = ">=", quantity = 40, unit = "years")
 #' ))
 #' @export
-create_logic_settings <- function(condition_type,
-                                  attribute = NULL,
-                                  category = NULL,
-                                  codes = NULL,
-                                  condition = NULL,
-                                  conditions = NULL,
-                                  date = NULL,
-                                  gender = NULL,
-                                  maximum = NULL,
-                                  minimum = NULL,
-                                  month = NULL,
-                                  name = NULL,
-                                  operator = NULL,
-                                  quantity = NULL,
-                                  race = NULL,
-                                  referenced_by_attribute = NULL,
-                                  since = NULL,
-                                  symptom = NULL,
-                                  unit = NULL,
-                                  value = NULL,
-                                  value_code = NULL,
-                                  vital_sign = NULL,
-                                  within = NULL,
-                                  year = NULL) {
+create_logic_settings <- function(
+  condition_type,
+  attribute = NULL,
+  category = NULL,
+  codes = NULL,
+  condition = NULL,
+  conditions = NULL,
+  date = NULL,
+  gender = NULL,
+  maximum = NULL,
+  minimum = NULL,
+  month = NULL,
+  name = NULL,
+  operator = NULL,
+  quantity = NULL,
+  race = NULL,
+  referenced_by_attribute = NULL,
+  since = NULL,
+  symptom = NULL,
+  unit = NULL,
+  value = NULL,
+  value_code = NULL,
+  vital_sign = NULL,
+  within = NULL,
+  year = NULL
+) {
   fields <- list(
     attribute = attribute,
     category = category,
@@ -126,7 +170,11 @@ create_logic_settings <- function(condition_type,
   )
   fields <- fields[!vapply(fields, is.null, logical(1))]
 
-  .build_settings(.logic_schema, condition_type, fields,
-    label = "logic", discriminator_field = "condition_type"
+  .build_settings(
+    .logic_schema,
+    condition_type,
+    fields,
+    label = "logic",
+    discriminator_field = "condition_type"
   )
 }
