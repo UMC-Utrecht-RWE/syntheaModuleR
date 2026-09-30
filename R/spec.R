@@ -1,0 +1,326 @@
+# spec.R -- stages 2-4 of the bridge -> spec -> module pipeline (stage 1 is read_bridge_codelist(),
+# in bridge.R): build_module_spec() ("add inclusion criteria / exposure / outcome parameters"),
+# write_module_spec()/read_module_spec() ("produce/read a YAML that is editable"), and
+# build_module_from_spec() ("go from YAML to build a module"). Kept in its own file, separate from
+# module.R's GMF-grammar recipes (build_disease_module()/build_cohort_module()), since this is a
+# distinct concern -- a study-config-shaped intermediate representation and its YAML I/O -- not
+# another layer of the JSON grammar. build_module_from_spec() is built entirely on the existing
+# Engine/Frontend layers (pathways()/chain()/create_delay()/create_population()/create_vaccine()/
+# create_medication()/create_condition()/build_cohort_module()); it introduces no new GMF concept.
+
+#' Assemble an exposure+outcome module spec from resolved codes and study parameters
+#'
+#' Combines already-resolved exposure/outcome code tables (typically `read_bridge_codelist()`'s
+#' output, though any `data.frame` with the right columns works) with the human-decided
+#' parameters a codelist alone can never supply -- arm shares, onset probability/timing, optional
+#' inclusion criteria -- into a single nested list, the "spec". Deliberately does not read any
+#' pipeline-computed-logic file (e.g. a study's own `study_variables.csv`) to fill these in; they
+#' are always caller-supplied, every time.
+#'
+#' @param name Module name.
+#' @param exposure_codes A `data.frame` with columns `option` (the arm name, e.g. `"abrysvo"`),
+#'   `code`, `display`, and `system` (or `coding_system`, used as a fallback column name so
+#'   `read_bridge_codelist()`'s output can be passed straight through).
+#' @param exposure_shares A named numeric vector covering every `exposure_codes$option` plus
+#'   `"comparator"` (the no-exposure arm's share); must sum to 1.
+#' @param outcome_codes A `data.frame` with columns `event_abbreviation` (or `label`), `code`,
+#'   `display`, and `system` (or `coding_system`).
+#' @param outcome_probability A single number in (0, 1), applied to every outcome, or the name of
+#'   a numeric column in `outcome_codes` to use per row instead.
+#' @param outcome_delay A `list(low, high, unit)` applied uniformly to every outcome's arbitrary
+#'   placement window. A specific item's delay can still be hand-overridden after writing the
+#'   YAML -- see the `outcomes.items[[i]].delay` shape `build_module_from_spec()` reads.
+#' @param inclusion_criteria Optional `list(age = list(operator, quantity, unit), gender = ...,
+#'   race = ..., socioeconomic = ...)`, passed straight through to `create_population()`'s
+#'   matching arguments. `NULL` (default): no Guard at all -- omitted from the module entirely,
+#'   not merely a no-op filter.
+#' @param exposure_state Which Frontend leaf builds each exposure row: `"vaccine"`
+#'   (`create_vaccine()`), `"medication"` (a bare, unconditioned `MedicationOrder` -- exposure
+#'   isn't "reason"-linked to a prior condition the way `create_medication()` expects), or
+#'   `"condition"` (`create_condition()`).
+#' @param exposure_attribute Person attribute name the exposure `pathways()` tags with the chosen
+#'   arm. Default `"exposure_group"`.
+#' @param provenance Optional free-form list (e.g. source file paths, filters used, a generation
+#'   timestamp) carried into the spec purely for audit -- never read back by
+#'   `build_module_from_spec()`.
+#' @return A nested list (the spec). Pass to `write_module_spec()` to persist it, or straight to
+#'   `build_module_from_spec()`.
+#' @examples
+#' \dontrun{
+#' spec <- build_module_spec(
+#'   "rsv_oa_1038",
+#'   exposure_codes = exposure_codes, exposure_shares = c(
+#'     abrysvo = 0.25, arexvy = 0.25, other_rsv = 0.05, comparator = 0.45
+#'   ),
+#'   outcome_codes = aesi_codes, outcome_probability = 0.03,
+#'   outcome_delay = list(low = 0, high = 1460, unit = "days")
+#' )
+#' write_module_spec(spec, "rsv_oa_1038.yaml")
+#' }
+#' @export
+build_module_spec <- function(
+  name,
+  exposure_codes,
+  exposure_shares,
+  outcome_codes,
+  outcome_probability,
+  outcome_delay,
+  inclusion_criteria = NULL,
+  exposure_state = c("vaccine", "medication", "condition"),
+  exposure_attribute = "exposure_group",
+  provenance = NULL
+) {
+  exposure_state <- match.arg(exposure_state)
+
+  .required_cols <- function(df, cols, df_name) {
+    missing <- setdiff(cols, names(df))
+    if (length(missing) > 0) {
+      stop(sprintf(
+        "build_module_spec(): %s is missing column(s): %s", df_name, paste(missing, collapse = ", ")
+      ))
+    }
+  }
+  .fallback_col <- function(df, ...) {
+    for (nm in c(...)) {
+      if (nm %in% names(df)) {
+        return(df[[nm]])
+      }
+    }
+    stop(sprintf(
+      "build_module_spec(): expected one of these columns: %s. Found: %s.",
+      paste(c(...), collapse = ", "), paste(names(df), collapse = ", ")
+    ))
+  }
+
+  .required_cols(exposure_codes, c("option", "code", "display"), "exposure_codes")
+  if (!"comparator" %in% names(exposure_shares)) {
+    stop("build_module_spec(): exposure_shares must include a \"comparator\" entry")
+  }
+  missing_shares <- setdiff(exposure_codes$option, names(exposure_shares))
+  if (length(missing_shares) > 0) {
+    stop(sprintf(
+      "build_module_spec(): exposure_shares is missing entries for: %s",
+      paste(missing_shares, collapse = ", ")
+    ))
+  }
+  exposure_system <- .fallback_col(exposure_codes, "system", "coding_system")
+
+  exposure_options <- lapply(seq_len(nrow(exposure_codes)), function(i) {
+    list(
+      option = exposure_codes$option[i],
+      system = exposure_system[i],
+      code = exposure_codes$code[i],
+      display = exposure_codes$display[i],
+      share = unname(exposure_shares[[exposure_codes$option[i]]])
+    )
+  })
+
+  total_share <- sum(vapply(exposure_options, function(o) o$share, numeric(1))) +
+    exposure_shares[["comparator"]]
+  if (!isTRUE(all.equal(unname(total_share), 1))) {
+    stop(sprintf("build_module_spec(): exposure_shares must sum to 1, got %s", total_share))
+  }
+
+  label_col <- if ("event_abbreviation" %in% names(outcome_codes)) "event_abbreviation" else "label"
+  .required_cols(outcome_codes, c(label_col, "code", "display"), "outcome_codes")
+  outcome_system <- .fallback_col(outcome_codes, "system", "coding_system")
+
+  probability_values <- if (
+    is.character(outcome_probability) &&
+      length(outcome_probability) == 1 &&
+      outcome_probability %in% names(outcome_codes)
+  ) {
+    outcome_codes[[outcome_probability]]
+  } else {
+    rep(outcome_probability, nrow(outcome_codes))
+  }
+  if (any(probability_values <= 0 | probability_values >= 1)) {
+    stop("build_module_spec(): outcome onset probabilities must be in (0, 1)")
+  }
+
+  outcome_items <- lapply(seq_len(nrow(outcome_codes)), function(i) {
+    list(
+      event_abbreviation = outcome_codes[[label_col]][i],
+      system = outcome_system[i],
+      code = outcome_codes$code[i],
+      display = outcome_codes$display[i],
+      probability = unname(probability_values[i])
+    )
+  })
+
+  list(
+    name = name,
+    inclusion_criteria = inclusion_criteria,
+    exposure = list(
+      attribute = exposure_attribute,
+      state_type = exposure_state,
+      options = exposure_options,
+      comparator = list(include = TRUE, share = unname(exposure_shares[["comparator"]]))
+    ),
+    outcomes = list(
+      default_probability = if (is.numeric(outcome_probability)) outcome_probability[1] else NULL,
+      default_delay = outcome_delay,
+      items = outcome_items
+    ),
+    provenance = provenance
+  )
+}
+
+#' Write a module spec to a YAML file
+#'
+#' Like `jsonlite::toJSON()` (see `write_module_json()`'s internal `.to_json_ascii_safe()`),
+#' `yaml::write_yaml()`'s Unicode handling is locale-dependent and silently corrupts non-ASCII
+#' text under a non-UTF-8 locale. `write_module_spec()`/`read_module_spec()` route every
+#' character field through the same ASCII-safe placeholder scheme used for JSON output, so a
+#' spec's non-ASCII display text (e.g. an accented clinical term) survives the YAML round-trip
+#' correctly regardless of the process locale.
+#'
+#' @param spec A spec list (`build_module_spec()`'s output, or a hand-edited one).
+#' @param path Output file path. Parent directories are created if needed.
+#' @return `path`, invisibly.
+#' @export
+write_module_spec <- function(spec, path) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  yaml::write_yaml(.escape_non_ascii_deep(spec), path)
+  invisible(path)
+}
+
+#' Read a module spec from a YAML file
+#'
+#' Checks the required top-level keys are present, erroring clearly (naming which ones are
+#' missing) rather than failing deep inside `build_module_from_spec()`. Restores any ASCII-safe
+#' placeholder `write_module_spec()` wrote for non-ASCII text back to the real character; a
+#' hand-edited YAML file that never went through `write_module_spec()` (and so has no
+#' placeholders to restore) round-trips unchanged.
+#'
+#' @param path Path to a YAML file written by `write_module_spec()`, or hand-edited.
+#' @return The spec, as a nested list.
+#' @export
+read_module_spec <- function(path) {
+  spec <- .restore_non_ascii_deep(yaml::read_yaml(path))
+  .check_required_spec_keys(spec, path)
+  spec
+}
+
+#' @noRd
+.check_required_spec_keys <- function(spec, source_label) {
+  required <- c("name", "exposure", "outcomes")
+  missing <- setdiff(required, names(spec))
+  if (length(missing) > 0) {
+    stop(sprintf(
+      "%s is missing required top-level key(s): %s",
+      source_label, paste(missing, collapse = ", ")
+    ))
+  }
+}
+
+#' Build a Synthea module from a spec
+#'
+#' Purely mechanical -- no codelist access, no parameter decisions, everything it needs is already
+#' resolved in `x`. Builds, in order: an optional `create_population()` Guard from
+#' `inclusion_criteria` (entirely omitted -- not a no-op -- when absent; `chain()` already drops a
+#' `NULL` fragment, so this needs no special-casing); the exposure `pathways()` block from
+#' `exposure$options`/`comparator`, using the leaf matching `exposure$state_type`; one independent
+#' `chain(create_delay(...), pathways(onset vs. none))` block per `outcomes$items` row (a
+#' per-item `probability`/`delay` overrides `outcomes$default_probability`/`default_delay` when
+#' present -- the hand-editable escape hatch, even though `build_module_spec()` itself never
+#' writes a per-item delay). `chain()`s everything and wraps in `build_cohort_module()` (which
+#' runs `validate_module()`).
+#'
+#' @param x A path to a YAML spec file, or an already-loaded spec list (`build_module_spec()`'s
+#'   or `read_module_spec()`'s output).
+#' @param as_json If TRUE (default), returns the module as a pretty-printed JSON string. If
+#'   FALSE, returns the R list instead.
+#' @param validate Passed to `build_cohort_module()`.
+#' @return The module: a JSON string or an R list, per `as_json`.
+#' @examples
+#' \dontrun{
+#' build_module_from_spec("rsv_oa_1038.yaml")
+#' }
+#' @export
+build_module_from_spec <- function(x, as_json = TRUE, validate = TRUE) {
+  spec <- if (is.character(x) && length(x) == 1) {
+    read_module_spec(x)
+  } else {
+    .check_required_spec_keys(x, "spec")
+    x
+  }
+
+  exposure_leaf <- switch(spec$exposure$state_type,
+    vaccine = function(label, code) create_vaccine(label, code),
+    medication = function(label, code) {
+      create_step("MedicationOrder", codes = list(code), chronic = TRUE, label = label)
+    },
+    condition = function(label, code) create_condition(label, code, diagnosis = "wellness"),
+    stop(sprintf(
+      "build_module_from_spec(): unknown exposure state_type '%s'", spec$exposure$state_type
+    ))
+  )
+
+  opt_names <- vapply(spec$exposure$options, function(opt) opt$option, character(1))
+  exposure_options <- .named_list(
+    lapply(spec$exposure$options, function(opt) {
+      code <- create_component_settings(
+        "code", system = opt$system, code = opt$code, display = opt$display
+      )
+      exposure_leaf(paste0("Exposure - ", opt$option), code)
+    }),
+    opt_names
+  )
+  exposure_shares <- .named_list(
+    as.list(vapply(spec$exposure$options, function(opt) opt$share, numeric(1))),
+    opt_names
+  )
+  exposure_shares <- unlist(exposure_shares)
+
+  if (isTRUE(spec$exposure$comparator$include)) {
+    exposure_options <- c(exposure_options, list(comparator = NULL))
+    exposure_shares <- c(exposure_shares, c(comparator = spec$exposure$comparator$share))
+  }
+
+  exposure_fragment <- pathways(
+    "Exposure",
+    options = exposure_options,
+    shares = exposure_shares,
+    attribute = spec$exposure$attribute
+  )
+
+  outcome_fragments <- lapply(spec$outcomes$items, function(item) {
+    code <- create_component_settings(
+      "code", system = item$system, code = item$code, display = item$display
+    )
+    onset <- create_condition(
+      paste0("Outcome - ", item$event_abbreviation), code,
+      diagnosis = "wellness"
+    )
+    p <- if (!is.null(item$probability)) item$probability else spec$outcomes$default_probability
+    delay <- if (!is.null(item$delay)) item$delay else spec$outcomes$default_delay
+    if (is.null(p) || is.null(delay)) {
+      stop(sprintf(
+        "build_module_from_spec(): outcome item '%s' has no probability/delay and no default is set",
+        item$event_abbreviation
+      ))
+    }
+    chain(
+      create_delay(
+        delay$low, delay$high, delay$unit,
+        label = paste0(item$event_abbreviation, " Delay")
+      ),
+      pathways(
+        paste0(item$event_abbreviation, " Onset"),
+        options = list(onset = onset, none = NULL),
+        shares = c(onset = p, none = 1 - p)
+      )
+    )
+  })
+
+  inclusion_fragment <- if (!is.null(spec$inclusion_criteria)) {
+    do.call(create_population, c(list(label = "Inclusion Criteria"), spec$inclusion_criteria))
+  } else {
+    NULL
+  }
+
+  full_fragment <- do.call(chain, c(list(inclusion_fragment, exposure_fragment), outcome_fragments))
+
+  build_cohort_module(spec$name, full_fragment, as_json = as_json, validate = validate)
+}
