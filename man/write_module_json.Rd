@@ -21,7 +21,8 @@ Write a module to disk.
 \examples{
 states <- list(
   Initial = create_state_settings("Initial",
-    transition = create_transition_settings("direct", to = "Terminal")),
+    transition = create_transition_settings("direct", to = "Terminal")
+  ),
   Terminal = create_state_settings("Terminal")
 )
 module_json <- build_module("Minimal Example", states)

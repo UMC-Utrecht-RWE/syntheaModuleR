@@ -30,9 +30,16 @@ earlier in the pathway (which can go stale).
 }
 \examples{
 on_med <- create_logic_settings("ActiveMedication",
-  codes = list(create_component_settings("code", system = "RxNorm", code = "860975",
-                                          display = "Metformin")))
-classify("Treatment Status", condition = on_med,
-  options = list(treated = create_tag("Treated", attribute = "cohort", value = "treated"),
-                 untreated = create_tag("Untreated", attribute = "cohort", value = "untreated")))
+  codes = list(create_component_settings("code",
+    system = "RxNorm", code = "860975",
+    display = "Metformin"
+  ))
+)
+classify("Treatment Status",
+  condition = on_med,
+  options = list(
+    treated = create_tag("Treated", attribute = "cohort", value = "treated"),
+    untreated = create_tag("Untreated", attribute = "cohort", value = "untreated")
+  )
+)
 }

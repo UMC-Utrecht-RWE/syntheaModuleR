@@ -30,10 +30,16 @@ into.
 }
 \examples{
 pathways("First-Line Treatment",
-  options = list(metformin = create_medication("Metformin",
-                   create_component_settings("code", system = "RxNorm", code = "860975",
-                                              display = "Metformin"),
-                   condition = "Diabetes", duration = "long"),
-                 none = NULL),
-  shares = c(metformin = 0.8, none = 0.2))
+  options = list(
+    metformin = create_medication("Metformin",
+      create_component_settings("code",
+        system = "RxNorm", code = "860975",
+        display = "Metformin"
+      ),
+      condition = "Diabetes", duration = "long"
+    ),
+    none = NULL
+  ),
+  shares = c(metformin = 0.8, none = 0.2)
+)
 }

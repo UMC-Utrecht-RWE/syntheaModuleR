@@ -49,7 +49,8 @@ validated module.
 \examples{
 states <- list(
   Initial = create_state_settings("Initial",
-    transition = create_transition_settings("direct", to = "Terminal")),
+    transition = create_transition_settings("direct", to = "Terminal")
+  ),
   Terminal = create_state_settings("Terminal")
 )
 build_module("Minimal Example", states)
