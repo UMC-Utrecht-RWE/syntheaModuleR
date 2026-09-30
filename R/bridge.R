@@ -1,14 +1,13 @@
 # bridge.R -- reads RWE-BRIDGE-style reference codelists (the "event_definition / coding_system /
 # code / concept_name / tags / type / event_abbreviation" schema family used across several
-# UMC-Utrecht-RWE study repos, e.g. RSV-OA-1038, RSV-1026, case-study-01-covid19,
-# case-study-07-valproate) into a clean, canonically-named code table. This is stage 1 of the
+# UMC-Utrecht-RWE study repos) into a clean, canonically-named code table. This is stage 1 of the
 # bridge -> spec -> module pipeline (see spec.R for stages 2-4): "specify where the necessary
 # information is."
 #
 # Deliberately does NOT attempt to read a study's own study_variables.csv/composite_study_
 # variables.csv-style pipeline-computed-logic files, and deliberately does NOT attempt to support
 # the structurally different OMOP/CDM-concept codelist family (no tags/type vocabulary at all,
-# seen in e.g. case-study-02-lungcancer, case-study-10-coloncancer, case-study-08-rsv) -- a source
+# seen in some other study repos) -- a source
 # file that doesn't resolve the columns actually asked for errors clearly rather than silently
 # returning nonsense.
 
@@ -18,7 +17,7 @@
 #' `concept_name` renamed `label`, a drug-proxy file using `product_identifier`/`product_name`
 #' instead of `coding_system`/`code_name`, ...) means a fixed set of column names can't be
 #' hardcoded. Every argument defaults to the "full events/AESI/COV codelist" header shape (the
-#' schema `read_bridge_codelist()`'s own reference case, RSV-OA-1038, uses); override individual
+#' schema `read_bridge_codelist()` was originally built against); override individual
 #' entries for a source that deviates, or set an entry to `NULL` to mean "this field doesn't exist
 #' in this source" (fine as long as nothing requires it -- see `read_bridge_codelist()`).
 #'
@@ -63,7 +62,7 @@ bridge_columns <- function(
 #' (case-insensitively, substring-matched so a compound tag like `"multiple:narrow+possible"`
 #' still counts as `"narrow"`) and dropping `exclude`/`ignore`/unmapped rows entirely -- this is
 #' the AESI-style extraction shape (many candidate codes per concept, pick the best one), the
-#' generalization of the tag-filtering fix applied by hand while building the RSV-OA-1038 module
+#' generalization of the tag-filtering fix applied by hand while building an earlier study module
 #' (an unfiltered pick had landed on an `exclude`-tagged row for `ANAPHYLAXIS`). Leave `group_by =
 #' NULL` (the default) for the exposure-style extraction shape instead -- a handful of
 #' already-distinct rows (e.g. specific vaccine products) that the caller filters directly
