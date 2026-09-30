@@ -1,8 +1,8 @@
 # syntheaModuleR
 
-<!- badges: start ->
-
-<!- badges: end ->
+<!-- badges: start -->
+[![GitHub](https://img.shields.io/badge/GitHub-UMC--Utrecht--RWE%2FsyntheaModuleR-181717?logo=github)](https://github.com/UMC-Utrecht-RWE/syntheaModuleR)
+<!-- badges: end -->
 
 `syntheaModuleR` builds valid [Synthea](https://github.com/synthetichealth/synthea) Generic
 Module Framework (GMF) module JSON files from R, instead of hand-writing the JSON.

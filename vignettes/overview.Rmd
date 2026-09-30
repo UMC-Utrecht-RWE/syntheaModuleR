@@ -1,0 +1,155 @@
+---
+title: "Package Overview"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Package Overview}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This package builds valid [Synthea](https://github.com/synthetichealth/synthea) Generic Module
+Framework (GMF) module JSON files from R. It does not run Synthea -- it only produces the JSON
+files; generating patients from them needs a real Synthea checkout (`./run_synthea -m <name>`).
+Every field name and constraint it knows about was extracted directly from Synthea's Java engine
+(`org.mitre.synthea.engine`), not guessed from example modules.
+
+```{r setup}
+library(syntheaModuleR)
+```
+
+## Two layers
+
+The package is two layers stacked on top of each other:
+
+- **The Frontend layer** -- where most work starts. Leaf functions (`create_condition()`,
+  `create_medication()`, `create_vaccine()`, ...) each return a *fragment*: a few ready-wired
+  states for one common clinical shape. Combinators (`chain()`, `pathways()`, `classify()`,
+  `repeat_until()`) sequence, branch and loop fragments, and `build_cohort_module()` turns the
+  finished fragment into a validated module. You never type a transition target by hand.
+- **The Engine layer** -- one schema-driven builder per GMF grammar layer, mirroring Synthea's Java
+  classes 1:1: `create_component_settings()`, `create_logic_settings()`,
+  `create_transition_settings()`, `create_state_settings()`, and `build_module()`. Every Frontend
+  function is built on these; drop down to them for full control over every state and transition.
+
+A single Frontend leaf is already a complete module:
+
+```{r frontend}
+diabetes_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "44054006", display = "Diabetes mellitus type 2 (disorder)"
+)
+cohort <- create_condition("Diabetes", diabetes_code, diagnosis = "wellness")
+module <- build_cohort_module("Diabetes Cohort", cohort)
+```
+
+The same kind of result from the Engine layer is spelled out state by state. The smallest possible
+valid module is just the two states every module needs -- `Initial` and one `Terminal` -- wired
+directly together:
+
+```{r minimal}
+minimal_module <- build_module(
+  name = "Minimal Example",
+  states = list(
+    Initial = create_state_settings("Initial",
+      transition = create_transition_settings("direct", to = "Terminal")
+    ),
+    Terminal = create_state_settings("Terminal")
+  )
+)
+cat(minimal_module)
+```
+
+Either way, the result is a JSON string ready for `write_module_json()`.
+
+A third entry point sits on top of both: if your codes live in a RWE-BRIDGE-style codelist, the
+codelist-to-module pipeline (`read_bridge_codelist()` -> `build_module_spec()` -> an editable YAML
+spec -> `build_module_from_spec()`) builds an exposure module plus one module per outcome without
+writing any states yourself.
+
+## Getting started
+
+1. **[The Frontend Layer: From One Condition to a Full Protocol](frontend-layer.html)** -- start
+   here. Grows a single `create_condition()` into a full protocol-shaped cohort module (population
+   eligibility, probability-weighted exposure arms, switching, gap-tolerant persistence via
+   `repeat_until()`, and a final `classify()`), one combinator at a time.
+2. **[Building Cohorts Incrementally: Diagnosis, Treatment Pathways, and Switching](cohort-building.html)**
+   -- a similar cohort (a diagnosis, two first-line drugs plus a no-medication pathway, switching
+   and discontinuation, classification by the medication record) built directly with Engine-layer
+   `create_state_settings()` calls, so you can see exactly what the Frontend generates for you --
+   plus an explicit `validate_module()` check.
+3. **[From a RWE-BRIDGE codelist to a Synthea module](bridge-to-module.html)** -- the
+   codelist-to-module pipeline, stage by stage: read the codelist, add study parameters, edit the
+   YAML spec, build the modules.
+
+## Advanced: the Engine layer
+
+4. **[The Five Layers: Components, Logic, Transitions, States, Modules](layers.html)** -- the
+   Engine layer on its own. Starts with `States` -- the layer you write the most -- then unpacks
+   what nests inside a state (`Components`, `Logic`, `Transitions`), before assembling everything
+   into a `Module`.
+5. **[build_disease_module() vs. build_module(): Recipe vs. Hand-Composed](recipe-vs-compose.html)**
+   -- the onset -> encounter -> resolve/death convenience recipe, proven byte-for-byte identical
+   to hand-composing the same shape, and exactly where its coverage ends.
+6. **[Logic Combinators and Guards](logic-and-guards.html)** -- the predicate sublanguage in
+   depth: `And`/`Or`/`Not`/`AtLeast`/`AtMost`, and the `Guard` state that re-tests a condition
+   every timestep rather than branching once.
+7. **[The Distribution Component: Modeling Randomness](distribution.html)** -- the one irregular
+   component shape (`EXACT`/`UNIFORM`/`GAUSSIAN`/`EXPONENTIAL`/`TRIANGULAR`), and where it nests
+   inside `Delay`, `VitalSign`, and `Procedure`.
+8. **[SetAttribute: Value Source Precedence](set-attribute-precedence.html)** -- the one state
+   whose multiple value-source fields are **not** mutually exclusive at build time, and the
+   precedence order the Java engine uses to pick a winner when more than one is given.
+
+## GMF grammar reference
+
+Look these up as needed rather than reading them start to finish:
+
+- **[State Reference: All 31 State Types](state-reference.html)** -- every `create_state_settings()`
+  type, including `CallSubmodule`, `Physiology`, `Counter`, `AllergyOnset`, `CarePlanStart`,
+  `Vaccine`, and more.
+- **[Logic Reference: All 21 Predicate Types](logic-reference.html)** -- every
+  `create_logic_settings()` leaf predicate: `Gender`, `Date`, `PriorState`, `ActiveAllergy`, and
+  more.
+- **[Transition Reference: All Six Kinds](transition-reference.html)** -- every
+  `create_transition_settings()` kind, including `complex`, `lookup_table`, and `type_of_care`.
+- **[Component Reference: All Eight Value Shapes](component-reference.html)** -- every
+  `create_component_settings()` shape, including `exact`, `date_input`, `sampled_data`,
+  `attachment`, and `io_mapper`.
+
+## Quick reference
+
+| Layer                  | Functions                                                   | Covered in |
+|------------------------|--------------------------------------------------------------|------------|
+| Frontend: leaves       | `create_condition()`, `create_medication()`, `create_vaccine()`, `create_population()`, `create_step()`, ... | [frontend-layer](frontend-layer.html) |
+| Frontend: combinators  | `chain()`/`add()`, `pathways()`, `classify()`, `repeat_until()` | [frontend-layer](frontend-layer.html) |
+| Frontend: finisher     | `build_cohort_module()`                                      | [frontend-layer](frontend-layer.html) |
+| Codelist pipeline      | `read_bridge_codelist()`, `build_module_spec()`, `write_module_spec()`/`read_module_spec()`, `build_module_from_spec()` | [bridge-to-module](bridge-to-module.html) |
+| Engine: states         | `create_state_settings()`                                    | [layers](layers.html), [state-reference](state-reference.html), [set-attribute-precedence](set-attribute-precedence.html) |
+| Engine: components     | `create_component_settings()`                                | [layers](layers.html), [component-reference](component-reference.html), [distribution](distribution.html) |
+| Engine: logic          | `create_logic_settings()`                                    | [layers](layers.html), [logic-reference](logic-reference.html), [logic-and-guards](logic-and-guards.html) |
+| Engine: transitions    | `create_transition_settings()`                               | [layers](layers.html), [transition-reference](transition-reference.html) |
+| Engine: modules        | `build_module()`, `validate_module()`, `write_module_json()` | [layers](layers.html), [cohort-building](cohort-building.html) |
+| Engine: recipe         | `build_disease_module()`                                     | [recipe-vs-compose](recipe-vs-compose.html) |
+
+## Package layout
+
+```
+R/
+  blocks.R       Frontend leaves (create_condition(), create_medication(), create_step(), ...)
+  combinators.R  Frontend combinators (chain()/add(), pathways(), classify(), repeat_until())
+  bridge.R       read_bridge_codelist(), bridge_columns() -- codelist pipeline, stage 1
+  spec.R         build_module_spec(), write_module_spec(), read_module_spec(),
+                 build_module_from_spec() -- codelist pipeline, stages 2-4
+  components.R   .component_schema + .distribution_param_schema + create_component_settings()
+  logic.R        .logic_schema + create_logic_settings()
+  transitions.R  .transition_schema + create_transition_settings()
+  states.R       .state_schema + create_state_settings()
+  module.R       build_module(), validate_module(), write_module_json(),
+                 build_disease_module() (recipe), build_cohort_module() (Frontend finisher)
+```
