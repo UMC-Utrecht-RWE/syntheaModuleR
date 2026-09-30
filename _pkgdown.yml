@@ -1,12 +1,16 @@
 url: https://umc-utrecht-rwe.github.io/syntheaModuleR/
-
 template:
   bootstrap: 5
-
 navbar:
   structure:
-    left:  [getstarted, reference, articles, news]
-    right: [search, github]
+    left:
+    - getstarted
+    - reference
+    - articles
+    - news
+    right:
+    - search
+    - github
   components:
     getstarted:
       text: Get started
@@ -20,7 +24,7 @@ navbar:
         href: articles/cohort-building.html
       - text: From a codelist to a module
         href: articles/bridge-to-module.html
-      - text: -------
+      - text: '-------'
       - text: Advanced
       - text: The Engine layer
         href: articles/layers.html
@@ -32,7 +36,7 @@ navbar:
         href: articles/distribution.html
       - text: SetAttribute value precedence
         href: articles/set-attribute-precedence.html
-      - text: -------
+      - text: '-------'
       - text: GMF grammar reference
       - text: State reference
         href: articles/state-reference.html
@@ -42,14 +46,13 @@ navbar:
         href: articles/transition-reference.html
       - text: Component reference
         href: articles/component-reference.html
-      - text: -------
+      - text: '-------'
       - text: More articles...
         href: articles/index.html
     github:
       icon: fa-github
       href: https://github.com/UMC-Utrecht-RWE/syntheaModuleR
       aria-label: GitHub
-
 articles:
 - title: Getting started
   contents:
@@ -57,31 +60,27 @@ articles:
   - frontend-layer
   - cohort-building
   - bridge-to-module
-
 - title: Advanced
-  desc: >
-    The Engine (backend) layer: one builder per GMF grammar layer, mirroring
-    Synthea's Java classes 1:1.
+  desc: |
+    The Engine (backend) layer: one builder per GMF grammar layer, mirroring Synthea's Java classes 1:1.
   contents:
   - layers
   - recipe-vs-compose
   - logic-and-guards
   - distribution
   - set-attribute-precedence
-
 - title: GMF grammar reference
-  desc: Generated per-type reference tables for every State, Logic, Transition and Component.
+  desc: Generated per-type reference tables for every State, Logic, Transition and
+    Component.
   contents:
   - state-reference
   - logic-reference
   - transition-reference
   - component-reference
-
 reference:
-- title: "Frontend: building blocks"
-  desc: >
-    Leaf constructors. Each returns a fragment (`list(states, entry, exit)`)
-    wrapping one common clinical shape.
+- title: 'Frontend: building blocks'
+  desc: |
+    Leaf constructors. Each returns a fragment (`list(states, entry, exit)`) wrapping one common clinical shape.
   contents:
   - create_condition
   - create_medication
@@ -100,8 +99,7 @@ reference:
   - create_guard
   - create_population
   - create_step
-
-- title: "Frontend: combinators"
+- title: 'Frontend: combinators'
   desc: Compose fragments into larger fragments -- sequencing, branching and looping.
   contents:
   - chain
@@ -109,15 +107,11 @@ reference:
   - pathways
   - classify
   - repeat_until
-
-- title: "Frontend: finishing a module"
-  contents:
-  - build_cohort_module
-
-- title: "Codelist to module pipeline"
-  desc: >
-    Read a RWE-BRIDGE-style codelist, combine it with study parameters into a
-    YAML spec, and assemble the spec into a module.
+- title: 'Frontend: finishing a module'
+  contents: build_cohort_module
+- title: Codelist to module pipeline
+  desc: |
+    Read a RWE-BRIDGE-style codelist, combine it with study parameters into a YAML spec, and assemble the spec into a module.
   contents:
   - read_bridge_codelist
   - bridge_columns
@@ -125,26 +119,23 @@ reference:
   - write_module_spec
   - read_module_spec
   - build_module_from_spec
-
-- title: "Backend (Engine layer): builders"
-  desc: >
-    One schema-driven builder per GMF grammar layer. Used by every Frontend
-    function under the hood.
+- title: 'Backend (Engine layer): builders'
+  desc: |
+    One schema-driven builder per GMF grammar layer. Used by every Frontend function under the hood.
   contents:
   - create_component_settings
   - create_logic_settings
   - create_transition_settings
   - create_state_settings
-
-- title: "Backend (Engine layer): modules"
+- title: 'Backend (Engine layer): modules'
   desc: Assemble, validate and write a module from hand-built states.
   contents:
   - build_module
   - validate_module
   - write_module_json
   - build_disease_module
-
 - title: internal
   contents:
   - starts_with(".")
   - syntheaModuleR-package
+
