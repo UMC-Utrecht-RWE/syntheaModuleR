@@ -168,36 +168,26 @@ build_module_spec <- function(
 
 #' Write a module spec to a YAML file
 #'
-#' Like `jsonlite::toJSON()` (see `write_module_json()`'s internal `.to_json_ascii_safe()`),
-#' `yaml::write_yaml()`'s Unicode handling is locale-dependent and silently corrupts non-ASCII
-#' text under a non-UTF-8 locale. `write_module_spec()`/`read_module_spec()` route every
-#' character field through the same ASCII-safe placeholder scheme used for JSON output, so a
-#' spec's non-ASCII display text (e.g. an accented clinical term) survives the YAML round-trip
-#' correctly regardless of the process locale.
-#'
 #' @param spec A spec list (`build_module_spec()`'s output, or a hand-edited one).
 #' @param path Output file path. Parent directories are created if needed.
 #' @return `path`, invisibly.
 #' @export
 write_module_spec <- function(spec, path) {
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
-  yaml::write_yaml(.escape_non_ascii_deep(spec), path)
+  yaml::write_yaml(spec, path)
   invisible(path)
 }
 
 #' Read a module spec from a YAML file
 #'
 #' Checks the required top-level keys are present, erroring clearly (naming which ones are
-#' missing) rather than failing deep inside `build_module_from_spec()`. Restores any ASCII-safe
-#' placeholder `write_module_spec()` wrote for non-ASCII text back to the real character; a
-#' hand-edited YAML file that never went through `write_module_spec()` (and so has no
-#' placeholders to restore) round-trips unchanged.
+#' missing) rather than failing deep inside `build_module_from_spec()`.
 #'
 #' @param path Path to a YAML file written by `write_module_spec()`, or hand-edited.
 #' @return The spec, as a nested list.
 #' @export
 read_module_spec <- function(path) {
-  spec <- .restore_non_ascii_deep(yaml::read_yaml(path))
+  spec <- yaml::read_yaml(path)
   .check_required_spec_keys(spec, path)
   spec
 }
