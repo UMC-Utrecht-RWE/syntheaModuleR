@@ -87,7 +87,7 @@ diabetes_careplan_code <- create_component_settings("code",
 
 `Initial`, `Terminal`, and `Guard` are recapped from `vignette("layers")`; `Delay` from
 `vignette("distribution")`. `Simple` is a plain pass-through node -- no fields, just a transition
--- used throughout `example_trial_emulation.R` as a routing point between branches.
+-- typically used as a routing point between branches.
 `CallSubmodule` hands control to another module file by path; this package doesn't check that
 the referenced submodule actually exists in the target Synthea checkout.
 
@@ -381,5 +381,5 @@ create_state_settings("SupplyList",
 
 Most of the 31 examples above are standalone -- built and printed, not assembled into a full
 module, since wiring 31 states into one coherent graph would obscure rather than clarify each
-one's shape. `vignette("layers")` and `example_compose.R`/`example_trial_emulation.R`
+one's shape. `vignette("layers")` and `vignette("cohort-building")`
 show several of these state types wired together into real, validated modules.

@@ -36,13 +36,9 @@ the output of `pathways()` is exactly as valid an input to `chain()` or another 
 single `create_condition()` call is.
 
 This vignette builds up from the smallest possible fragment to a full protocol-shaped cohort
-module, using worked examples from `experimentation/notes/protocol-intake-checklist.md` -- a
-checklist for turning a real study protocol into a cohort module, distilled from three actual
-protocols kept in this repository (`experimentation/covid-19.docx`,
-`experimentation/immunocompromised.docx`, `experimentation/valproate.docx`). As that checklist
-warns, every medical code used below is an illustrative placeholder, not verified against a real
-codeset -- the same disclaimer `cohort-building.Rmd` and `example_trial_emulation.R` carry for
-their own example codes.
+module, using worked examples modeled on real observational study protocols. Every medical code
+used below is an illustrative placeholder, not verified against a real codeset -- the same
+disclaimer `vignette("cohort-building")` carries for its own example codes.
 
 ```{r setup}
 library(syntheaModuleR)
@@ -203,15 +199,13 @@ hand.
 
 Every example so far skipped *who gets into the cohort at all*. That's `create_population()` (a
 flat demographic `AND`) and `create_guard()` (anything else -- a condition that must pre-exist, a
-washout window, a composite `Or()`/`And()`/`Not()` tree) -- both documented in
-`experimentation/notes/protocol-intake-checklist.md`'s section 1, "Population eligibility."
+washout window, a composite `Or()`/`And()`/`Not()` tree).
 
-The checklist's valproate worked example (`experimentation/valproate.docx`: paternal valproate
-exposure and offspring outcomes) is reproduced here verbatim. It's chosen over the checklist's
-COVID-19 and immunocompromised examples deliberately: in *this* protocol, "contraindication" and
-"infertility" really are single, atomic, code-list-driven concepts, not composite algorithms the
-way "immunocompromised" turned out to be in the other two (see the checklist's "Dig deeper" note
-if you're adapting your own protocol and a criterion reads as one adjective in the summary text):
+The example below is modeled on a paternal valproate exposure and offspring outcomes protocol. It
+was chosen deliberately: in this protocol, "contraindication" and "infertility" really are single,
+atomic, code-list-driven concepts, not composite algorithms (a criterion like "immunocompromised"
+often reads as one adjective in a protocol's summary text but turns out to be a multi-part
+definition -- check before modeling it as a single code list):
 
 ```{r level6}
 epilepsy_code <- create_component_settings("code",
@@ -362,8 +356,6 @@ Every level here used a fragment straight out of `blocks.R`, composed with one o
 combinators. Nothing in `pathways()`/`classify()`/`repeat_until()`/`chain()` cares how deep or
 shallow the fragments underneath them are -- level 4's switching sub-graph inside a `pathways()`
 option and level 7's `repeat_until()` loop inside a *different* `pathways()` option compose the
-same way a single leaf does. `experimentation/notes/protocol-intake-checklist.md` walks the full
-extraction process section by section (including the COVID-19 and immunocompromised protocols'
-own population-eligibility examples, and the "Extract" / "Decide" / "Dig deeper" / "Out of scope"
-distinctions worth knowing before turning your own protocol into a module) -- start there when
-adapting a real study protocol instead of the illustrative diabetes/valproate examples here.
+same way a single leaf does. When adapting a real study protocol instead of the illustrative
+diabetes/valproate examples here, work through it section by section -- population eligibility,
+exposure, follow-up, outcomes -- and pick the matching leaf or combinator for each.
