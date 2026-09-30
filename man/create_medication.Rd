@@ -38,5 +38,7 @@ metformin <- create_component_settings("code",
   display = "Metformin hydrochloride 500 MG Oral Tablet"
 )
 create_medication("Metformin",
-metformin, condition = "Diabetes", duration = "long")
+  metformin,
+  condition = "Diabetes", duration = "long"
+)
 }

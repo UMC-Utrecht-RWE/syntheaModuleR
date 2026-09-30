@@ -101,6 +101,13 @@ build_module_spec <- function(
     )
   })
 
+  .check_shares(
+    c(
+      vapply(exposure_options, function(o) o$share, numeric(1)),
+      exposure_shares[["comparator"]]
+    ),
+    "build_module_spec(): exposure_shares"
+  )
   total_share <- sum(vapply(
     exposure_options,
     function(o) o$share,
@@ -135,8 +142,8 @@ build_module_spec <- function(
   } else {
     rep(outcome_probability, nrow(outcome_codes))
   }
-  if (any(probability_values <= 0 | probability_values >= 1)) {
-    stop("build_module_spec(): outcome onset probabilities must be in (0, 1)")
+  for (p in probability_values) {
+    .check_probability(p, "build_module_spec(): outcome onset probabilities")
   }
 
   outcome_items <- lapply(seq_len(nrow(outcome_codes)), function(i) {
@@ -253,6 +260,31 @@ read_module_spec <- function(path) {
   ))
 }
 
+#' Stop unless every arm share is a single finite number in [0, 1]
+#' @noRd
+.check_shares <- function(shares, where) {
+  ok <- vapply(
+    shares,
+    function(x) is.numeric(x) && length(x) == 1 && is.finite(x) && x >= 0 && x <= 1,
+    logical(1)
+  )
+  if (!all(ok)) {
+    stop(sprintf("%s: every share must be a finite number in [0, 1]", where))
+  }
+}
+
+#' Stop unless `p` is a single finite number strictly between 0 and 1
+#' @noRd
+.check_probability <- function(p, where) {
+  if (!is.numeric(p) || length(p) != 1 || !is.finite(p) || p <= 0 || p >= 1) {
+    stop(sprintf(
+      "%s must be a number in (0, 1), got %s",
+      where,
+      paste(format(p), collapse = ", ")
+    ))
+  }
+}
+
 #' Build one exposure option's leaf fragment for a spec's `exposure$state_type`
 #'
 #' @param state_type One of `"vaccine"`, `"medication"`, `"condition"`.
@@ -279,28 +311,42 @@ read_module_spec <- function(path) {
   )
 }
 
-#' Build a Synthea module from a spec
+#' Build Synthea modules from a spec
 #'
 #' Purely mechanical -- no codelist access, no parameter decisions, everything it needs is already
-#' resolved in `x`. Builds, in order: an optional `create_population()` Guard from
-#' `inclusion_criteria` (entirely omitted -- not a no-op -- when absent; `chain()` already drops a
-#' `NULL` fragment, so this needs no special-casing); the exposure `pathways()` block from
-#' `exposure$options`/`comparator`, using the leaf matching `exposure$state_type`; one independent
-#' `chain(create_delay(...), pathways(onset vs. none))` block per `outcomes$items` row (a
-#' per-item `probability`/`delay` overrides `outcomes$default_probability`/`default_delay` when
-#' present -- the hand-editable escape hatch, even though `build_module_spec()` itself never
-#' writes a per-item delay). `chain()`s everything and wraps in `build_cohort_module()` (which
-#' runs `validate_module()`).
+#' resolved in `x`. Produces several modules, not one:
+#'
+#' - **The exposure module** (named `spec$name`): an optional `create_population()` Guard from
+#'   `inclusion_criteria` (entirely omitted -- not a no-op -- when absent), then the exposure
+#'   `pathways()` block from `exposure$options`/`comparator`, using the leaf matching
+#'   `exposure$state_type`. The chosen arm is tagged on the person as `exposure$attribute`.
+#' - **One outcome module per `outcomes$items` row** (named `"<spec$name> - <event_abbreviation>"`):
+#'   a Guard that waits until `exposure$attribute` is set, then `create_delay(...)`, then
+#'   `pathways(onset vs. none)`. A per-item `probability`/`delay` overrides
+#'   `outcomes$default_probability`/`default_delay` when present -- the hand-editable escape
+#'   hatch, even though `build_module_spec()` itself never writes a per-item delay.
+#'
+#' Outcomes are separate modules because a person is only ever in one state of a given module at a
+#' time: chained inside one module, each outcome's delay would only start after the previous one's
+#' had finished, making the windows cumulative and order-dependent. Synthea runs every module for
+#' a person side by side, so separate modules give each outcome its own window measured from
+#' exposure (to Synthea's time-step resolution). Every module goes through `build_cohort_module()`
+#' (which runs `validate_module()`). All of them need to be installed together in the target
+#' Synthea checkout.
 #'
 #' @param x A path to a YAML spec file, or an already-loaded spec list (`build_module_spec()`'s
 #'   or `read_module_spec()`'s output).
-#' @param as_json If TRUE (default), returns the module as a pretty-printed JSON string. If
-#'   FALSE, returns the R list instead.
+#' @param as_json If TRUE (default), each module is a pretty-printed JSON string. If FALSE, each
+#'   is an R list instead.
 #' @param validate Passed to `build_cohort_module()`.
-#' @return The module: a JSON string or an R list, per `as_json`.
+#' @return A named list of modules (JSON strings or R lists, per `as_json`), keyed by module name:
+#'   the exposure module first, then one per outcome item.
 #' @examples
 #' \dontrun{
-#' build_module_from_spec("vaccine_safety.yaml")
+#' modules <- build_module_from_spec("vaccine_safety.yaml")
+#' for (nm in names(modules)) {
+#'   write_module_json(modules[[nm]], file.path("modules", paste0(nm, ".json")))
+#' }
 #' }
 #' @export
 build_module_from_spec <- function(x, as_json = TRUE, validate = TRUE) {
@@ -346,25 +392,40 @@ build_module_from_spec <- function(x, as_json = TRUE, validate = TRUE) {
     )
   }
 
+  .check_shares(exposure_shares, "build_module_from_spec(): exposure shares")
+  exposure_attribute <- spec$exposure$attribute
+  if (!is.character(exposure_attribute) || length(exposure_attribute) != 1 || !nzchar(exposure_attribute)) {
+    stop(
+      "build_module_from_spec(): exposure$attribute must be set -- the outcome modules wait on it"
+    )
+  }
+
   exposure_fragment <- pathways(
     "Exposure",
     options = exposure_options,
     shares = exposure_shares,
-    attribute = spec$exposure$attribute
+    attribute = exposure_attribute
   )
 
-  outcome_fragments <- lapply(spec$outcomes$items, function(item) {
-    code <- create_component_settings(
-      "code",
-      system = item$system,
-      code = item$code,
-      display = item$display
+  inclusion_fragment <- if (!is.null(spec$inclusion_criteria)) {
+    do.call(
+      create_population,
+      c(list(label = "Inclusion Criteria"), spec$inclusion_criteria)
     )
-    onset <- create_condition(
-      paste0("Outcome - ", item$event_abbreviation),
-      code,
-      diagnosis = "wellness"
-    )
+  } else {
+    NULL
+  }
+
+  modules <- list()
+  modules[[spec$name]] <- build_cohort_module(
+    spec$name,
+    chain(inclusion_fragment, exposure_fragment),
+    as_json = as_json,
+    validate = validate
+  )
+
+  for (item in spec$outcomes$items) {
+    abbr <- item$event_abbreviation
     p <- if (!is.null(item$probability)) {
       item$probability
     } else {
@@ -378,42 +439,60 @@ build_module_from_spec <- function(x, as_json = TRUE, validate = TRUE) {
     if (is.null(p) || is.null(delay)) {
       stop(sprintf(
         "build_module_from_spec(): outcome item '%s' has no probability/delay and no default is set",
-        item$event_abbreviation
+        abbr
       ))
     }
-    chain(
-      create_delay(
-        delay$low,
-        delay$high,
-        delay$unit,
-        label = paste0(item$event_abbreviation, " Delay")
-      ),
-      pathways(
-        paste0(item$event_abbreviation, " Onset"),
-        options = list(onset = onset, none = NULL),
-        shares = c(onset = p, none = 1 - p)
-      )
+    .check_probability(
+      p,
+      sprintf("build_module_from_spec(): outcome item '%s' probability", abbr)
     )
-  })
 
-  inclusion_fragment <- if (!is.null(spec$inclusion_criteria)) {
-    do.call(
-      create_population,
-      c(list(label = "Inclusion Criteria"), spec$inclusion_criteria)
+    code <- create_component_settings(
+      "code",
+      system = item$system,
+      code = item$code,
+      display = item$display
     )
-  } else {
-    NULL
+    onset <- create_condition(
+      paste0("Outcome - ", abbr),
+      code,
+      diagnosis = "wellness"
+    )
+    module_name <- paste0(spec$name, " - ", abbr)
+    if (!is.null(modules[[module_name]])) {
+      stop(sprintf(
+        "build_module_from_spec(): duplicate outcome event_abbreviation '%s'",
+        abbr
+      ))
+    }
+    modules[[module_name]] <- build_cohort_module(
+      module_name,
+      chain(
+        create_guard(
+          create_logic_settings(
+            "Attribute",
+            attribute = exposure_attribute,
+            operator = "is not nil",
+            value = TRUE
+          ),
+          label = "Wait For Exposure"
+        ),
+        create_delay(
+          delay$low,
+          delay$high,
+          delay$unit,
+          label = paste0(abbr, " Delay")
+        ),
+        pathways(
+          paste0(abbr, " Onset"),
+          options = list(onset = onset, none = NULL),
+          shares = c(onset = p, none = 1 - p)
+        )
+      ),
+      as_json = as_json,
+      validate = validate
+    )
   }
 
-  full_fragment <- do.call(
-    chain,
-    c(list(inclusion_fragment, exposure_fragment), outcome_fragments)
-  )
-
-  build_cohort_module(
-    spec$name,
-    full_fragment,
-    as_json = as_json,
-    validate = validate
-  )
+  modules
 }

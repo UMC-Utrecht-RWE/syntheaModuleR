@@ -112,6 +112,59 @@ test_that("read_bridge_codelist errors, naming the concept, when every row is ex
   )
 })
 
+test_that("read_bridge_codelist drops compound tags carrying exclude/ignore, even with a preferred part", {
+  df <- data.frame(
+    event_abbreviation = c("X", "X"),
+    coding_system = "MEDCODEID",
+    code = c("1", "2"),
+    code_name = c("excluded compound", "possible row"),
+    tags = c("multiple:exclude+narrow", "possible"),
+    type = "AESI",
+    stringsAsFactors = FALSE
+  )
+  result <- read_bridge_codelist(
+    df,
+    type = "AESI",
+    coding_system = "MEDCODEID",
+    group_by = "event_abbreviation"
+  )
+  expect_equal(result$display, "possible row")
+})
+
+test_that("read_bridge_codelist treats an NA tags cell as ineligible instead of erroring", {
+  df <- data.frame(
+    event_abbreviation = c("X", "X"),
+    coding_system = "MEDCODEID",
+    code = c("1", "2"),
+    code_name = c("untagged", "tagged"),
+    tags = c(NA, "narrow"),
+    type = "AESI",
+    stringsAsFactors = FALSE
+  )
+  result <- read_bridge_codelist(
+    df,
+    type = "AESI",
+    coding_system = "MEDCODEID",
+    group_by = "event_abbreviation"
+  )
+  expect_equal(result$display, "tagged")
+})
+
+test_that("read_bridge_codelist treats NA filter fields as non-matching", {
+  df <- data.frame(
+    event_abbreviation = c("X", "Y"),
+    coding_system = c("MEDCODEID", NA),
+    code = c("1", "2"),
+    code_name = c("kept", "blank system"),
+    tags = "narrow",
+    type = c("AESI", NA),
+    stringsAsFactors = FALSE
+  )
+  result <- read_bridge_codelist(df, type = "AESI", coding_system = "MEDCODEID")
+  expect_equal(nrow(result), 1)
+  expect_equal(result$display, "kept")
+})
+
 # read_bridge_codelist() -- group_by NULL (exposure-style) ----
 
 test_that("read_bridge_codelist with group_by = NULL returns every filtered row uncollapsed", {

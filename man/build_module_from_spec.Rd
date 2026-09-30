@@ -2,7 +2,7 @@
 % Please edit documentation in R/spec.R
 \name{build_module_from_spec}
 \alias{build_module_from_spec}
-\title{Build a Synthea module from a spec}
+\title{Build Synthea modules from a spec}
 \usage{
 build_module_from_spec(x, as_json = TRUE, validate = TRUE)
 }
@@ -10,28 +10,45 @@ build_module_from_spec(x, as_json = TRUE, validate = TRUE)
 \item{x}{A path to a YAML spec file, or an already-loaded spec list (\code{build_module_spec()}'s
 or \code{read_module_spec()}'s output).}
 
-\item{as_json}{If TRUE (default), returns the module as a pretty-printed JSON string. If
-FALSE, returns the R list instead.}
+\item{as_json}{If TRUE (default), each module is a pretty-printed JSON string. If FALSE, each
+is an R list instead.}
 
 \item{validate}{Passed to \code{build_cohort_module()}.}
 }
 \value{
-The module: a JSON string or an R list, per \code{as_json}.
+A named list of modules (JSON strings or R lists, per \code{as_json}), keyed by module name:
+the exposure module first, then one per outcome item.
 }
 \description{
 Purely mechanical -- no codelist access, no parameter decisions, everything it needs is already
-resolved in \code{x}. Builds, in order: an optional \code{create_population()} Guard from
-\code{inclusion_criteria} (entirely omitted -- not a no-op -- when absent; \code{chain()} already drops a
-\code{NULL} fragment, so this needs no special-casing); the exposure \code{pathways()} block from
-\code{exposure$options}/\code{comparator}, using the leaf matching \code{exposure$state_type}; one independent
-\verb{chain(create_delay(...), pathways(onset vs. none))} block per \code{outcomes$items} row (a
-per-item \code{probability}/\code{delay} overrides \code{outcomes$default_probability}/\code{default_delay} when
-present -- the hand-editable escape hatch, even though \code{build_module_spec()} itself never
-writes a per-item delay). \code{chain()}s everything and wraps in \code{build_cohort_module()} (which
-runs \code{validate_module()}).
+resolved in \code{x}. Produces several modules, not one:
+}
+\details{
+\itemize{
+\item \strong{The exposure module} (named \code{spec$name}): an optional \code{create_population()} Guard from
+\code{inclusion_criteria} (entirely omitted -- not a no-op -- when absent), then the exposure
+\code{pathways()} block from \code{exposure$options}/\code{comparator}, using the leaf matching
+\code{exposure$state_type}. The chosen arm is tagged on the person as \code{exposure$attribute}.
+\item \strong{One outcome module per \code{outcomes$items} row} (named \code{"<spec$name> - <event_abbreviation>"}):
+a Guard that waits until \code{exposure$attribute} is set, then \code{create_delay(...)}, then
+\verb{pathways(onset vs. none)}. A per-item \code{probability}/\code{delay} overrides
+\code{outcomes$default_probability}/\code{default_delay} when present -- the hand-editable escape
+hatch, even though \code{build_module_spec()} itself never writes a per-item delay.
+}
+
+Outcomes are separate modules because a person is only ever in one state of a given module at a
+time: chained inside one module, each outcome's delay would only start after the previous one's
+had finished, making the windows cumulative and order-dependent. Synthea runs every module for
+a person side by side, so separate modules give each outcome its own window measured from
+exposure (to Synthea's time-step resolution). Every module goes through \code{build_cohort_module()}
+(which runs \code{validate_module()}). All of them need to be installed together in the target
+Synthea checkout.
 }
 \examples{
 \dontrun{
-build_module_from_spec("vaccine_safety.yaml")
+modules <- build_module_from_spec("vaccine_safety.yaml")
+for (nm in names(modules)) {
+  write_module_json(modules[[nm]], file.path("modules", paste0(nm, ".json")))
+}
 }
 }
