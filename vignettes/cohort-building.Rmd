@@ -1,0 +1,324 @@
+---
+title: "Building Cohorts Incrementally: Diagnosis, Treatment Pathways, and Switching"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Building Cohorts Incrementally: Diagnosis, Treatment Pathways, and Switching}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette assumes you've read `vignette("layers")` and `vignette("logic-and-guards")`. Every
+other vignette builds one concept in isolation. This one instead walks through a realistic
+*workflow*: growing a single module, one `states[["Name"]] <- ...` assignment at a time, until it
+produces a population with the kind of heterogeneity a real cohort study needs -- some patients on
+one first-line drug, some on another, some on none at all, and a subset who switch therapy or stop
+it altogether partway through, without losing track of the patients who didn't.
+
+Concretely, we'll build a module where simulated patients:
+
+1. get diagnosed with type 2 diabetes,
+2. split across two first-line drugs -- or get no medication at all,
+3. some fraction later switch therapy -- to the other first-line drug, to a third, or discontinue
+   treatment entirely,
+4. and are finally classified as "treated" or "untreated" by reading their actual medication
+   record, not by which pathway through the graph they took to get there.
+
+The example medical codes below (RxNorm/SNOMED-CT) are plausible placeholders chosen for realism,
+the same way `example_trial_emulation.R` notes for its own codes -- verify against current code
+sets before using this for anything beyond synthetic-data generation.
+
+```{r setup}
+library(syntheaModuleR)
+
+direct <- function(to) create_transition_settings("direct", to = to)
+
+diabetes_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "44054006", display = "Diabetes mellitus type 2 (disorder)")
+metformin_code <- create_component_settings("code",
+  system = "RxNorm", code = "860975", display = "Metformin hydrochloride 500 MG Oral Tablet")
+sulfonylurea_code <- create_component_settings("code",
+  system = "RxNorm", code = "310488", display = "Glipizide 5 MG Oral Tablet")
+third_agent_code <- create_component_settings("code",
+  system = "RxNorm", code = "1545653", display = "Empagliflozin 25 MG Oral Tablet")
+```
+
+`direct()` is the same one-line helper `example_trial_emulation.R` uses to cut down on repeating
+`create_transition_settings("direct", to = ...)` -- nothing more than that.
+
+## Step 1: the base cohort -- diagnosis only
+
+Start as small as possible: everyone in the cohort gets diagnosed with diabetes at a wellness
+visit and nothing else happens. This is already a complete, valid module on its own -- the point
+of building incrementally is that every step along the way is something you could hand to
+`build_module()` and get back a module that loads.
+
+```{r step1}
+states_v1 <- list(
+  Initial = create_state_settings("Initial", transition = direct("Diabetes Onset")),
+
+  "Diabetes Onset" = create_state_settings("ConditionOnset",
+    codes = list(diabetes_code), target_encounter = "Diagnosis Encounter",
+    transition = direct("Diagnosis Encounter")),
+
+  "Diagnosis Encounter" = create_state_settings("Encounter",
+    wellness = TRUE, transition = direct("End Diagnosis Encounter")),
+
+  "End Diagnosis Encounter" = create_state_settings("EncounterEnd",
+    transition = direct("Terminal")),
+
+  Terminal = create_state_settings("Terminal")
+)
+
+cat(build_module(name = "Cohort Building Vignette", states = states_v1))
+```
+
+Every patient who reaches `Terminal` here has exactly one thing in common: an active diabetes
+diagnosis. No medication, no subgroups yet -- that's what the next steps add, without touching
+anything already written above.
+
+## Step 2: two first-line drugs, and a group that gets neither
+
+Redirect `End Diagnosis Encounter` away from `Terminal` and into a `distributed_transition` that
+splits the cohort three ways: metformin, a sulfonylurea, or no medication at all. Each pathway
+tags a `diabetes_regimen` attribute so later states (and, eventually, whoever analyzes the
+generated data) can tell which path a given patient took.
+
+```{r step2}
+states_v2 <- states_v1
+
+states_v2[["End Diagnosis Encounter"]] <- create_state_settings("EncounterEnd",
+  transition = direct("First-Line Treatment Choice"))
+
+states_v2[["First-Line Treatment Choice"]] <- create_state_settings("Simple",
+  transition = create_transition_settings("distributed", options = list(
+    list(transition = "Start Metformin", distribution = 0.5),
+    list(transition = "Start Sulfonylurea", distribution = 0.3),
+    list(transition = "No Medication", distribution = 0.2)
+  )))
+
+states_v2[["Start Metformin"]] <- create_state_settings("MedicationOrder",
+  codes = list(metformin_code), reason = "Diabetes Onset", chronic = TRUE,
+  transition = direct("Tag Metformin Regimen"))
+states_v2[["Tag Metformin Regimen"]] <- create_state_settings("SetAttribute",
+  attribute = "diabetes_regimen", value = "metformin", transition = direct("Terminal"))
+
+states_v2[["Start Sulfonylurea"]] <- create_state_settings("MedicationOrder",
+  codes = list(sulfonylurea_code), reason = "Diabetes Onset", chronic = TRUE,
+  transition = direct("Tag Sulfonylurea Regimen"))
+states_v2[["Tag Sulfonylurea Regimen"]] <- create_state_settings("SetAttribute",
+  attribute = "diabetes_regimen", value = "sulfonylurea", transition = direct("Terminal"))
+
+states_v2[["No Medication"]] <- create_state_settings("SetAttribute",
+  attribute = "diabetes_regimen", value = "none", transition = direct("Terminal"))
+
+cat(build_module(name = "Cohort Building Vignette", states = states_v2))
+```
+
+Note what `"No Medication"` *doesn't* do: no `MedicationOrder` state at all. "Some patients take
+no medication" isn't a flag you set afterwards -- it's a pathway that never issues an order in the
+first place. `reason = "Diabetes Onset"` on the two `MedicationOrder` states resolves against the
+`ConditionOnset` state of that name from step 1, per the field's resolution rule
+(`vignette("state-reference")`).
+
+## Step 3: some patients switch, and some discontinue entirely
+
+Now make a slice of the metformin pathway revisit their treatment after a delay: most stay on
+metformin, some switch to the sulfonylurea, some switch to a third agent entirely -- "another
+medication" that was never a first-line option at all -- and some discontinue diabetes medication
+altogether, with nothing started in its place. The sulfonylurea and no-medication pathways from
+step 2 are untouched; they still route straight to `Terminal`.
+
+```{r step3}
+states_v3 <- states_v2
+
+states_v3[["Tag Metformin Regimen"]] <- create_state_settings("SetAttribute",
+  attribute = "diabetes_regimen", value = "metformin", transition = direct("Treatment Review Delay"))
+
+states_v3[["Treatment Review Delay"]] <- create_state_settings("Delay",
+  range = create_component_settings("range", low = 6, high = 18, unit = "months"),
+  transition = direct("Metformin Switch Check"))
+
+states_v3[["Metformin Switch Check"]] <- create_state_settings("Simple",
+  transition = create_transition_settings("distributed", options = list(
+    list(transition = "Continue Metformin", distribution = 0.60),
+    list(transition = "Switch To Sulfonylurea", distribution = 0.15),
+    list(transition = "Switch To Third Agent", distribution = 0.15),
+    list(transition = "Discontinue Metformin", distribution = 0.10)
+  )))
+
+states_v3[["Continue Metformin"]] <- create_state_settings("Simple", transition = direct("Terminal"))
+
+states_v3[["Switch To Sulfonylurea"]] <- create_state_settings("MedicationEnd",
+  medication_order = "Start Metformin", transition = direct("Start Switch Sulfonylurea"))
+states_v3[["Start Switch Sulfonylurea"]] <- create_state_settings("MedicationOrder",
+  codes = list(sulfonylurea_code), reason = "Diabetes Onset", chronic = TRUE,
+  transition = direct("Tag Switched Regimen (Sulfonylurea)"))
+states_v3[["Tag Switched Regimen (Sulfonylurea)"]] <- create_state_settings("SetAttribute",
+  attribute = "diabetes_regimen", value = "sulfonylurea (switched)", transition = direct("Terminal"))
+
+states_v3[["Switch To Third Agent"]] <- create_state_settings("MedicationEnd",
+  medication_order = "Start Metformin", transition = direct("Start Third Agent"))
+states_v3[["Start Third Agent"]] <- create_state_settings("MedicationOrder",
+  codes = list(third_agent_code), reason = "Diabetes Onset", chronic = TRUE,
+  transition = direct("Tag Switched Regimen (Other)"))
+states_v3[["Tag Switched Regimen (Other)"]] <- create_state_settings("SetAttribute",
+  attribute = "diabetes_regimen", value = "other", transition = direct("Terminal"))
+
+states_v3[["Discontinue Metformin"]] <- create_state_settings("MedicationEnd",
+  medication_order = "Start Metformin", transition = direct("Terminal"))
+
+cat(build_module(name = "Cohort Building Vignette", states = states_v3))
+```
+
+A few things worth noticing:
+
+- **`MedicationEnd.medication_order` names the state that started the drug being ended** --
+  `"Start Metformin"`, the same state all three of these pathways came through -- not the drug
+  itself. `validate_module()` checks that this name resolves to a real state the same way it
+  checks any other transition target (see the explicit check below).
+- The switched-to-sulfonylurea patients get their *own* `MedicationOrder` state
+  (`"Start Switch Sulfonylurea"`), separate from the first-line `"Start Sulfonylurea"` in step 2,
+  tagged with a distinguishable `diabetes_regimen` value (`"sulfonylurea (switched)"` vs.
+  `"sulfonylurea"`). Nothing forces this split -- routing both pathways into the same
+  `"Start Sulfonylurea"` state would work too, since Synthea resolves states by name and a state
+  can have any number of incoming transitions. Keeping them separate here is a design choice: it
+  lets an analysis distinguish "first-line sulfonylurea" from "switched to sulfonylurea after
+  metformin" as two different subgroups, which is exactly the kind of thing a real cohort study
+  cares about.
+- **`"Discontinue Metformin"` is only a `MedicationEnd`** -- no new `MedicationOrder`, and,
+  deliberately, no state re-tagging `diabetes_regimen` afterwards. It still reads `"metformin"`,
+  the value `"Tag Metformin Regimen"` set on the way in. That's not an oversight; step 4 uses
+  exactly this pathway to show why you shouldn't rely on that tag alone.
+
+## Step 4: classify by the record, not by the path
+
+`diabetes_regimen` records *which pathway a patient took*. That's useful, but it's not the same
+thing as *what's actually true about their record right now* -- and step 3's `"Discontinue
+Metformin"` pathway already made those two facts diverge: `diabetes_regimen` still says
+`"metformin"` there, even though the medication itself was ended with nothing started in its
+place.
+
+So the last step classifies every patient by querying their actual medication state with
+`ActiveMedication` logic, combined with `Or` (`vignette("logic-and-guards")`), rather than by
+trusting the attribute set earlier:
+
+```{r step4}
+states_v4 <- states_v3
+
+on_any_diabetes_medication <- create_logic_settings("Or", conditions = list(
+  create_logic_settings("ActiveMedication", codes = list(metformin_code)),
+  create_logic_settings("ActiveMedication", codes = list(sulfonylurea_code)),
+  create_logic_settings("ActiveMedication", codes = list(third_agent_code))
+))
+
+states_v4[["Classify Treatment Status"]] <- create_state_settings("Simple",
+  transition = create_transition_settings("conditional", options = list(
+    list(condition = on_any_diabetes_medication, transition = "Treated Cohort"),
+    list(transition = "Untreated Cohort")  # condition omitted = the else branch
+  )))
+states_v4[["Treated Cohort"]] <- create_state_settings("SetAttribute",
+  attribute = "diabetes_cohort", value = "treated", transition = direct("Terminal"))
+states_v4[["Untreated Cohort"]] <- create_state_settings("SetAttribute",
+  attribute = "diabetes_cohort", value = "untreated", transition = direct("Terminal"))
+
+# Route every leaf that previously went straight to Terminal through classification first.
+for (leaf in c("Tag Sulfonylurea Regimen", "No Medication", "Continue Metformin",
+                "Tag Switched Regimen (Sulfonylurea)", "Tag Switched Regimen (Other)",
+                "Discontinue Metformin")) {
+  states_v4[[leaf]]$direct_transition <- "Classify Treatment Status"
+}
+
+full_module <- build_module(name = "Cohort Building Vignette", states = states_v4)
+cat(full_module)
+```
+
+Walk through what `diabetes_cohort` ends up as for each subgroup: `"No Medication"` never ordered
+anything, so `on_any_diabetes_medication` is false -- `"untreated"`. `"Continue Metformin"` and
+first-line `"Tag Sulfonylurea Regimen"` are each still on the drug they started -- `"treated"`.
+Both switch pathways ended metformin and started a different drug -- still `"treated"`, correctly,
+even though `diabetes_regimen` now reads `"sulfonylurea (switched)"` or `"other"` instead of
+`"metformin"`. And `"Discontinue Metformin"` -- the pathway where `diabetes_regimen` is stale and
+still says `"metformin"` -- correctly comes out `"untreated"` anyway, because `ActiveMedication`
+checks the actual record, not the leftover tag. The classification is robust to exactly how a
+patient got there, because it asks the record instead of the path.
+
+## Checking the graph explicitly with `validate_module()`
+
+`build_module()` already calls `validate_module()` internally (`validate = TRUE` by default), which
+is why every `cat(build_module(...))` call above would have stopped with an error instead of
+printing JSON if any of these six pathways had a dangling reference. You can also run that same
+check yourself, directly, against a module list -- useful when you're assembling `states` across
+several R objects or a script, and want to check the graph before deciding whether to render it to
+JSON at all:
+
+```{r validate-explicit}
+full_module_list <- build_module(name = "Cohort Building Vignette", states = states_v4, as_json = FALSE)
+isTRUE(validate_module(full_module_list))
+```
+
+`validate_module()` is what actually catches the mistake in a broken graph, not `build_module()`
+itself -- `build_module()` just calls it and propagates the error. Reproducing the exact mistake
+the first bullet in step 3 warned about, a typo'd `medication_order` reference, shows what that
+looks like:
+
+```{r validate-broken, error = TRUE}
+broken_states <- states_v4
+broken_states[["Discontinue Metformin"]]$medication_order <- "Start Metfromin"  # typo
+validate_module(list(states = broken_states))
+```
+
+## Sanity-checking cohort proportions before touching Synthea
+
+`vignette("transition-reference")` notes that a `distributed_transition`'s `distribution` values
+should sum to ~1.0 across each set of options. That constraint also means you can compute expected
+cohort sizes by hand, straight from the numbers you just wrote, as a design-time check that the
+population mix looks like what you intended -- without generating a single patient:
+
+```{r sanity-check}
+first_line <- c(metformin = 0.5, sulfonylurea = 0.3, none = 0.2)
+metformin_outcome <- c(continues = 0.60, switches_sulfonylurea = 0.15,
+                        switches_other = 0.15, discontinues = 0.10)
+
+data.frame(
+  final_regimen = c("metformin", "sulfonylurea (first-line)", "sulfonylurea (switched)",
+                     "other (switched)", "discontinued (no replacement)", "none (first-line)"),
+  expected_share = c(
+    first_line["metformin"] * metformin_outcome["continues"],
+    first_line["sulfonylurea"],
+    first_line["metformin"] * metformin_outcome["switches_sulfonylurea"],
+    first_line["metformin"] * metformin_outcome["switches_other"],
+    first_line["metformin"] * metformin_outcome["discontinues"],
+    first_line["none"]
+  ),
+  row.names = NULL
+)
+```
+
+That table should sum to 1 (it does), and `"none (first-line)"` staying exactly `0.2` -- unchanged
+since step 2 -- is the arithmetic confirmation that adding the switching and discontinuation logic
+in step 3 never touched the no-medication or first-line-sulfonylurea pathways at all. Two rows
+("discontinued (no replacement)" and "none (first-line)") both end up `"untreated"` after step 4's
+classification, even though only one of them was ever tagged that way along the path.
+
+## Where to go from here
+
+This module stops at classification, but nothing about the pattern is specific to diabetes or to
+two drugs. The same three moves -- split into pathways with `distributed_transition`, tag each
+pathway with `SetAttribute`, and later re-derive group membership from
+`ActiveMedication`/`ActiveCondition` logic rather than trusting the tag alone -- extend to any
+cohort with heterogeneous treatment pathways: a `Guard` (`vignette("logic-and-guards")`) could
+hold patients on a drug until an `Observation` crosses some threshold before letting them switch;
+a `conditional_transition` keyed on `PriorState` could route only patients who've actually been
+through `"Switch To Third Agent"` into a separate follow-up pathway; a `distributed_transition`
+whose probability comes from a `NamedDistribution` (`list(attribute = ..., default = ...)`, used
+throughout `example_trial_emulation.R`) could make the switch or discontinuation probability
+itself depend on an attribute set earlier in the same module, instead of a fixed number; and
+`validate_module()`, called explicitly as above, is worth running again after any such addition
+before regenerating the JSON.

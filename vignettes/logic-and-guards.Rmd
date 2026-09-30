@@ -1,0 +1,188 @@
+---
+title: "Logic Combinators and Guards"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Logic Combinators and Guards}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette assumes you've read `vignette("layers")`. It goes deeper on one layer -- Logic --
+and on the one state type that exists specifically to consume it in a loop: `Guard`.
+
+```{r setup}
+library(syntheaModuleR)
+```
+
+## Leaf predicates, briefly
+
+`create_logic_settings(condition_type, ...)` builds a single Logic condition. Most of its 21
+`condition_type`s are leaves that test one fact about the simulated person directly:
+
+| `condition_type`                                          | Tests                                                    |
+|-------------------------------------------------------------|-----------------------------------------------------------|
+| `Gender`, `Age`, `Date`, `Race`, `SocioeconomicStatus`       | Demographics / simulated calendar date                    |
+| `Attribute`, `VitalSign`, `Symptom`                          | A person attribute / vital sign / symptom severity value  |
+| `Observation`                                                | A prior Observation state's recorded value                |
+| `ActiveCondition`, `ActiveAllergy`, `ActiveMedication`, `ActiveCarePlan` | Whether something is currently active on the record |
+| `PriorState`                                                  | Whether a named state was already visited (`since`/`within`) |
+| `True`, `False`                                               | Constants -- for testing, not expected in a real module    |
+
+```{r leaf-examples}
+adult <- create_logic_settings("Age", operator = ">=", quantity = 18, unit = "years")
+female <- create_logic_settings("Gender", gender = "F")
+has_diabetes <- create_logic_settings("ActiveCondition",
+  codes = list(create_component_settings("code",
+    system = "SNOMED-CT", code = "44054006", display = "Diabetes mellitus type 2 (disorder)")))
+```
+
+Four of these leaves (`Observation`, `ActiveCondition`, `ActiveAllergy`, `ActiveMedication`,
+`ActiveCarePlan`) share the same constraint: **exactly one** of `codes` or
+`referenced_by_attribute` -- never both, never neither. `create_logic_settings()` enforces this
+the same way every other `one_of` group is enforced, as a build-time error:
+
+```{r observation-oneof-error, error = TRUE}
+create_logic_settings("Observation", operator = "==", value = 5)
+```
+
+`Observation` has a sharper gotcha the schema can't catch: the Java engine throws a
+`NullPointerException` -- not a clean validation failure -- if the referenced Observation state
+hasn't actually run yet by the time this condition is evaluated, unless `operator` is
+`"is nil"`/`"is not nil"`. Guard a downstream `Observation` check with `And(PriorState(...), ...)`
+(see below) rather than relying on ordering alone.
+
+## The combinators: building a tree
+
+Five `condition_type`s don't test anything themselves -- they combine other Logic results into a
+tree. This is the actual point of this vignette: composition.
+
+**`And` / `Or`** take a list of nested conditions via `conditions = list(...)`, all of which (`And`)
+or any one of which (`Or`) must hold:
+
+```{r and-or}
+adult_female <- create_logic_settings("And", conditions = list(adult, female))
+
+high_risk <- create_logic_settings("Or", conditions = list(
+  has_diabetes,
+  create_logic_settings("Age", operator = ">=", quantity = 65, unit = "years")
+))
+```
+
+**`Not`** takes exactly one nested condition, singular -- `condition =`, not `conditions =`:
+
+```{r not}
+not_diabetic <- create_logic_settings("Not", condition = has_diabetes)
+```
+
+**`AtLeast` / `AtMost`** generalize `And`/`Or` to a quorum: `conditions` plus a `minimum` (for
+`AtLeast`) or `maximum` (for `AtMost`) count of how many of those nested conditions must currently
+evaluate to true. `And` is `AtLeast` with `minimum` equal to the full count; `Or` is `AtLeast` with
+`minimum = 1`.
+
+```{r atleast}
+two_of_three_risk_factors <- create_logic_settings("AtLeast", minimum = 2, conditions = list(
+  has_diabetes,
+  create_logic_settings("Age", operator = ">=", quantity = 65, unit = "years"),
+  create_logic_settings("VitalSign", vital_sign = "BMI", operator = ">=", value = 30)
+))
+```
+
+Because every combinator argument is itself a `create_logic_settings()` result, these nest to
+arbitrary depth -- an `Or` of `And`s of `Not`s composes exactly the way you'd build the equivalent
+boolean expression in R itself:
+
+```{r nested-tree}
+eligible <- create_logic_settings("And", conditions = list(
+  adult,
+  create_logic_settings("Not", condition = create_logic_settings("Or", conditions = list(
+    has_diabetes,
+    create_logic_settings("ActiveAllergy", codes = list(create_component_settings("code",
+      system = "RxNorm", code = "731370", display = "BNT162b2 vaccine")))
+  )))
+))
+str(eligible, max.level = 4)
+```
+
+## Guard: the state that loops on a condition
+
+**Function:** `create_state_settings("Guard", allow = <Logic>, transition = <Transition>)`
+
+A `Guard` is the one state type built specifically to hold a Logic tree (`allow`, required). It
+has exactly one behavior: **re-test `allow` every simulated timestep, and don't advance past this
+state until it passes.** That's a materially different thing from a `conditional_transition`,
+which tests its condition once, the instant the state is reached, and immediately picks a branch
+either way.
+
+```{r guard-vs-conditional}
+# Guard: blocks here, checking every timestep, until the person turns 18.
+age_guard <- create_state_settings("Guard",
+  allow = adult,
+  transition = create_transition_settings("direct", to = "Enrollment"))
+
+# conditional_transition: evaluated once, right now -- routes immediately, doesn't wait.
+age_branch <- create_state_settings("Simple",
+  transition = create_transition_settings("conditional", options = list(
+    list(condition = adult, transition = "Enrollment"),
+    list(transition = "Ineligible")  # condition omitted = the else branch
+  )))
+```
+
+Use `Guard` when "not yet eligible" should mean *wait* (a person who's 16 now will enroll two
+years from now, once `Age >= 18` starts passing). Use a conditional transition when "not eligible"
+should mean *route elsewhere now* and never revisit the check.
+
+## Worked example: a compound eligibility Guard
+
+`example_trial_emulation.R` gates its trial population on a single `Age` check and notes
+in a comment that a stricter version would exclude specific active conditions with a `Not` +
+`ActiveCondition` combinator. Here's that stricter gate actually built, combining everything
+above into one `Guard`:
+
+```{r worked-example}
+pregnancy_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "77386006", display = "Pregnancy (finding)")
+vaccine_allergy_code <- create_component_settings("code",
+  system = "RxNorm", code = "731370", display = "BNT162b2 vaccine")
+
+trial_eligibility <- create_logic_settings("And", conditions = list(
+  create_logic_settings("Age", operator = ">=", quantity = 16, unit = "years"),
+  create_logic_settings("Not", condition = create_logic_settings("ActiveCondition",
+    codes = list(pregnancy_code))),
+  create_logic_settings("Not", condition = create_logic_settings("ActiveAllergy",
+    codes = list(vaccine_allergy_code)))
+))
+
+states <- list(
+  Initial = create_state_settings("Initial",
+    transition = create_transition_settings("direct", to = "Eligibility Gate")),
+
+  "Eligibility Gate" = create_state_settings("Guard",
+    allow = trial_eligibility,
+    transition = create_transition_settings("direct", to = "Terminal")),
+
+  Terminal = create_state_settings("Terminal")
+)
+
+module_json <- build_module(name = "Logic and Guards Vignette Example", states = states)
+cat(module_json)
+```
+
+The Guard's `allow` is exactly the R expression tree above, serialized: an `And` of an `Age`
+check and two `Not`-wrapped `ActiveCondition`/`ActiveAllergy` checks -- and `build_module()`
+validated the whole graph (one `Initial`, a `Terminal`, every transition resolves) the same way
+it would for any other module.
+
+## Where to go from here
+
+This vignette covers `And`/`Or`/`Not`/`AtLeast`/`AtMost` and `Guard` in depth, plus three leaves
+(`Age`, `Symptom`, `ActiveCondition`, `ActiveAllergy`) along the way. `vignette("logic-reference")`
+is the complete reference for the other leaf predicates -- `Gender`, `Date`,
+`SocioeconomicStatus`, `Race`, `Attribute`, `VitalSign`, `PriorState`, `ActiveMedication`,
+`ActiveCarePlan`, `True`, and `False`.

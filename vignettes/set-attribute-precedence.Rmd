@@ -1,0 +1,180 @@
+---
+title: "SetAttribute: Value Source Precedence"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{SetAttribute: Value Source Precedence}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette assumes you've read `vignette("layers")` and, for the `distribution` examples
+below, `vignette("distribution")`. It covers one state type in isolation because it's the one
+place in this package where a real constraint from the Java engine is **not** enforced at build
+time -- worth understanding on its own, not just as a footnote.
+
+```{r setup}
+library(syntheaModuleR)
+```
+
+## Seven ways to give a value, one attribute set
+
+**Function:** `create_state_settings("SetAttribute", attribute = ..., ..., transition = ...)`
+
+`SetAttribute` writes a value onto a named person attribute. `attribute` and `transition` are the
+only required fields; everything else is a *value source*, and there are seven of them:
+`value`, `value_code`, `value_attribute`, `range`, `expression`, `series_data`, `distribution`.
+(`period` is an eighth optional field, paired with `series_data` -- see below.)
+
+Every other multi-source field in this package that has an "only one of these makes sense"
+relationship is enforced with a `one_of` constraint -- `Delay`'s `range`/`exact`/`distribution`,
+`VitalSign`'s four value sources, `Procedure`'s `duration`/`distribution` (see
+`vignette("distribution")`). `SetAttribute` is the one exception: this package's schema for it has
+**no `one_of` group at all**. You can pass all seven at once and `create_state_settings()` will
+build it without complaint.
+
+That's not an oversight -- it mirrors the Java engine itself, which doesn't reject multiple value
+sources either. Instead it resolves them by **precedence**, checking each in a fixed order and
+using the first one present:
+
+```
+expression  >  range  >  series_data  >  distribution  >  value_code  >  value_attribute  >  value
+```
+
+If you pass only one source, precedence is invisible -- it just works. It only matters once more
+than one is present, which this package will silently let you do.
+
+## Each source on its own
+
+```{r value}
+create_state_settings("SetAttribute",
+  attribute = "risk_score", value = 0,
+  transition = create_transition_settings("direct", to = "Next"))
+```
+
+`value_code` assigns a `Code` component rather than a scalar -- useful for an attribute that
+represents a coded concept, like a blood type:
+
+```{r value_code}
+create_state_settings("SetAttribute",
+  attribute = "blood_type",
+  value_code = create_component_settings("code",
+    system = "SNOMED-CT", code = "112144000", display = "Blood group A Rh(D) positive"),
+  transition = create_transition_settings("direct", to = "Next"))
+```
+
+`value_attribute` copies another attribute's current value:
+
+```{r value_attribute}
+create_state_settings("SetAttribute",
+  attribute = "risk_score_snapshot", value_attribute = "risk_score",
+  transition = create_transition_settings("direct", to = "Next"))
+```
+
+`range` samples uniformly between `low` and `high` -- the same `range` component from
+`vignette("layers")`:
+
+```{r range}
+create_state_settings("SetAttribute",
+  attribute = "risk_score",
+  range = create_component_settings("range", low = 0, high = 100),
+  transition = create_transition_settings("direct", to = "Next"))
+```
+
+`distribution` samples from any of the five `Distribution` kinds covered in
+`vignette("distribution")`:
+
+```{r distribution}
+create_state_settings("SetAttribute",
+  attribute = "risk_score",
+  distribution = create_component_settings("distribution", kind = "GAUSSIAN",
+    mean = 50, standardDeviation = 15, min = 0, max = 100),
+  transition = create_transition_settings("direct", to = "Next"))
+```
+
+`expression` evaluates a small formula string against the person's current attributes --
+Synthea's own expression mini-language (see the GMF wiki), not something this package parses or
+validates; it's passed through as a raw string:
+
+```{r expression}
+create_state_settings("SetAttribute",
+  attribute = "risk_score", expression = "#{risk_score} + 5",
+  transition = create_transition_settings("direct", to = "Next"))
+```
+
+`series_data` (paired with the optional `period`) drives a time-varying attribute through a
+sequence of values rather than a single sample. Like `expression`, this package doesn't have a
+dedicated component for its shape -- there's no `array` rule applied and no schema check beyond
+"it's present" -- so it's passed through as a raw R list, the same way `AllergyOnset`'s
+`reactions` or `ImagingStudy`'s `series` items are (see `vignette("layers")`'s "out of scope"
+note). Consult the GMF wiki for its exact expected shape before relying on it.
+
+## The gotcha, live
+
+Because there's no `one_of` here, this builds without error -- and without a warning that one of
+the two fields you gave is now dead:
+
+```{r two-sources-no-error}
+conflicting <- create_state_settings("SetAttribute",
+  attribute = "risk_score",
+  range = create_component_settings("range", low = 0, high = 100),
+  distribution = create_component_settings("distribution", kind = "GAUSSIAN",
+    mean = 50, standardDeviation = 15),
+  transition = create_transition_settings("direct", to = "Next"))
+names(conflicting)
+```
+
+Per the precedence order above, `range` outranks `distribution` -- so at runtime, in the real
+Synthea engine, the `distribution` field in this state is inert. Nothing in this package's
+`validate_module()` will catch that either, since graph-level validation checks structure (states
+exist, transitions resolve), not which combinations of optional fields are meaningful together.
+**The discipline of passing exactly one value source per `SetAttribute` call is on you, not the
+toolkit.**
+
+## Worked example: baseline, derive, copy
+
+```{r worked-example}
+states <- list(
+  Initial = create_state_settings("Initial",
+    transition = create_transition_settings("direct", to = "Set Baseline Risk")),
+
+  # 1. range: a random baseline value, sampled once.
+  "Set Baseline Risk" = create_state_settings("SetAttribute",
+    attribute = "risk_score",
+    range = create_component_settings("range", low = 0, high = 50),
+    transition = create_transition_settings("direct", to = "Apply Risk Modifier")),
+
+  # 2. expression: derive a new value from the attribute set in step 1.
+  "Apply Risk Modifier" = create_state_settings("SetAttribute",
+    attribute = "risk_score", expression = "#{risk_score} + 10",
+    transition = create_transition_settings("direct", to = "Snapshot Risk")),
+
+  # 3. value_attribute: copy the derived value somewhere else, verbatim.
+  "Snapshot Risk" = create_state_settings("SetAttribute",
+    attribute = "risk_score_at_enrollment", value_attribute = "risk_score",
+    transition = create_transition_settings("direct", to = "Terminal")),
+
+  Terminal = create_state_settings("Terminal")
+)
+
+module_json <- build_module(name = "SetAttribute Precedence Vignette Example", states = states)
+cat(module_json)
+```
+
+Each of these three `SetAttribute` states uses exactly one value source, so precedence never
+actually has to break a tie here -- which is the discipline the previous section argued for:
+one source per call, chosen deliberately, rather than relying on the precedence order to pick a
+winner for you.
+
+## Where to go from here
+
+A side-by-side of `build_disease_module()`'s onset -> encounter -> resolve/death recipe against
+hand-composing the same shape with `build_module()` directly is still open, and would be a natural
+next vignette -- it would also show `SetAttribute` used for real inside a recipe function rather
+than in isolation.

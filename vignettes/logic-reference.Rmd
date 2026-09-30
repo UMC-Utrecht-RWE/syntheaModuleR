@@ -1,0 +1,138 @@
+---
+title: "Logic Reference: All 21 Predicate Types"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Logic Reference: All 21 Predicate Types}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+`vignette("logic-and-guards")` goes deep on the five combinators (`And`/`Or`/`Not`/`AtLeast`/
+`AtMost`) and the `Guard` state that consumes them. This vignette is the complete reference for
+`create_logic_settings()`'s other 16 leaf predicates -- one example for every `condition_type`,
+including several that don't otherwise appear in any vignette.
+
+```{r setup}
+library(syntheaModuleR)
+```
+
+## Quick reference
+
+| `condition_type`     | Required                  | Optional                                | Constraint |
+|-----------------------|----------------------------|-------------------------------------------|------------|
+| `Gender`              | `gender`                   |                                            |            |
+| `Age`                 | `quantity`, `unit`, `operator` |                                        |            |
+| `Date`                | `operator`                 | `year`, `month`, `date`                   | exactly one of `year`/`month`/`date` |
+| `SocioeconomicStatus` | `category`                 |                                            |            |
+| `Race`                | `race`                      |                                            |            |
+| `Symptom`             | `symptom`, `operator`, `value` |                                        |            |
+| `Observation`         | `operator`                 | `codes`, `referenced_by_attribute`, `value`, `value_code` | exactly one of `codes`/`referenced_by_attribute` |
+| `Attribute`           | `attribute`, `operator`, `value` |                                      |            |
+| `VitalSign`           | `vital_sign`, `operator`, `value` |                                      |            |
+| `PriorState`          | `name`                      | `since`, `within`                        |            |
+| `ActiveCondition`     |                             | `codes`, `referenced_by_attribute`        | exactly one of the two |
+| `ActiveAllergy`       |                             | `codes`, `referenced_by_attribute`        | exactly one of the two |
+| `ActiveMedication`    |                             | `codes`, `referenced_by_attribute`        | exactly one of the two |
+| `ActiveCarePlan`      |                             | `codes`, `referenced_by_attribute`        | exactly one of the two |
+| `True`                |                             |                                            |            |
+| `False`               |                             |                                            |            |
+| `And`, `Or`           | `conditions`                |                                            | see `vignette("logic-and-guards")` |
+| `Not`                 | `condition`                 |                                            | see `vignette("logic-and-guards")` |
+| `AtLeast`, `AtMost`   | `conditions`, `minimum`/`maximum` |                                      | see `vignette("logic-and-guards")` |
+
+## Demographics and calendar
+
+```{r demographics}
+create_logic_settings("Gender", gender = "F")
+create_logic_settings("Age", operator = "<", quantity = 5, unit = "years")
+create_logic_settings("Date", operator = ">=", year = 2021)
+create_logic_settings("SocioeconomicStatus", category = "Low")
+```
+
+`race` isn't restricted to a fixed set of strings by this package -- it's passed through as
+given, the same way `io_mapper`'s `type` is (see `vignette("component-reference")`):
+
+```{r race}
+create_logic_settings("Race", race = "white")
+```
+
+## Attributes, symptoms, vitals, observations
+
+```{r attribute-symptom-vitalsign}
+create_logic_settings("Attribute", attribute = "risk_score", operator = ">=", value = 50)
+create_logic_settings("Symptom", symptom = "Chest Pain", operator = ">=", value = 50)
+create_logic_settings("VitalSign", vital_sign = "Blood Pressure", operator = ">", value = 140)
+```
+
+`vignette("logic-and-guards")` only shows `Observation`'s error case (missing both `codes` and
+`referenced_by_attribute`) -- here's a valid one, checking a previously-recorded height reading:
+
+```{r observation}
+height_code <- create_component_settings("code",
+  system = "LOINC", code = "8302-2", display = "Body height")
+
+create_logic_settings("Observation", codes = list(height_code), operator = ">", value = 200)
+```
+
+Remember the gotcha from `vignette("logic-and-guards")`: this throws a `NullPointerException` in
+the Java engine (not a clean validation failure) if the referenced `Observation` state hasn't run
+yet and `operator` isn't `"is nil"`/`"is not nil"`.
+
+## Active clinical state
+
+`ActiveCondition` is demoed in `vignette("logic-and-guards")`'s worked example; its three
+siblings share the exact same shape:
+
+```{r active-clinical-state}
+allergy_code <- create_component_settings("code",
+  system = "RxNorm", code = "7980", display = "Penicillin")
+medication_code <- create_component_settings("code",
+  system = "RxNorm", code = "313782", display = "Acetaminophen 325 MG Oral Tablet")
+careplan_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "698360004", display = "Diabetes self management plan")
+
+create_logic_settings("ActiveAllergy", codes = list(allergy_code))
+create_logic_settings("ActiveMedication", codes = list(medication_code))
+create_logic_settings("ActiveCarePlan", codes = list(careplan_code))
+```
+
+## PriorState
+
+Tests whether a named state has already been visited:
+
+```{r priorstate}
+create_logic_settings("PriorState", name = "Diagnosis Encounter")
+```
+
+`since`/`within` narrow *which* visit counts (e.g. only since a given state, or only within a
+recent window), but this package has no dedicated shape for them -- like `expression` and
+`series_data` (see `vignette("set-attribute-precedence")`), whatever value you pass is passed
+through as-is. Consult the GMF wiki for their exact expected shape before relying on them.
+
+## Constants
+
+```{r constants}
+create_logic_settings("True")
+create_logic_settings("False")
+```
+
+Per `vignette("logic-and-guards")`'s own note: mainly for testing, not expected in a real module.
+
+## Combinators (recap)
+
+`And`, `Or`, `Not`, `AtLeast`, and `AtMost` get a full vignette:
+`vignette("logic-and-guards")`. One line to complete this table:
+
+```{r combinators-recap}
+create_logic_settings("And", conditions = list(
+  create_logic_settings("Gender", gender = "F"),
+  create_logic_settings("Age", operator = ">=", quantity = 18, unit = "years")
+))
+```

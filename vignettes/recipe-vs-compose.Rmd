@@ -1,0 +1,199 @@
+---
+title: "build_disease_module() vs. build_module(): Recipe vs. Hand-Composed"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{build_disease_module() vs. build_module(): Recipe vs. Hand-Composed}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette assumes you've read `vignette("layers")`. Every other vignette so far has used
+`build_module()` directly -- the primitive, generic entry point. This package also ships one
+convenience function built entirely on top of it: `build_disease_module()`, a recipe for the
+single most common module shape (onset -> diagnosis encounter -> optional resolution/death ->
+`Terminal`). This vignette builds the *same* module both ways and proves they produce identical
+output, so you can see exactly what the recipe buys you -- and exactly where its edges are.
+
+```{r setup}
+library(syntheaModuleR)
+```
+
+## The recipe
+
+`example_generate.R` builds a minimal seasonal-rhinitis module with `build_disease_module()`
+in one call:
+
+```{r recipe}
+condition_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "444316003", display = "Seasonal allergic rhinitis (disorder)")
+
+recipe_module <- build_disease_module(
+  name = "Recipe vs. Compose Example",
+  condition_code = condition_code,
+  diagnosis = "wellness",
+  onset_delay = list(low = 1, high = 4, unit = "weeks"),
+  resolves_after = list(low = 2, high = 6, unit = "weeks"),
+  remarks = c("Built via build_disease_module().")
+)
+
+cat(jsonlite::toJSON(recipe_module, auto_unbox = TRUE, pretty = TRUE, null = "null"))
+```
+
+Note what you *didn't* have to do: no `create_state_settings()`, no `create_transition_settings()`,
+no manual wiring of five state names to each other. `build_disease_module()` returns an R list
+(`as_json = FALSE` always, unlike `build_module()`'s default), already validated -- hand it to
+`write_module_json()` directly, or wrap it in `jsonlite::toJSON()` yourself as above just to look
+at it.
+
+## What it built, read from the inside
+
+`build_disease_module()`'s own source (`module.R`) is not a separate code path -- it's
+`create_state_settings()` and `create_transition_settings()` calls, same as any module you'd write
+by hand, just decided programmatically from which optional arguments you passed. With
+`onset_delay` and `resolves_after` given, `age_gate` and `death` omitted, and
+`diagnosis = "wellness"`, it wires up exactly this chain:
+
+```
+Initial -> Onset Delay -> Condition Onset -> Diagnosis Encounter -> End Encounter
+        -> Condition Resolves Delay -> Condition Resolves -> Terminal
+```
+
+- **`Onset Delay`** (`Delay`, `range` from `onset_delay`) -- present only because `onset_delay`
+  was given; omit it and `Condition Onset` would follow `Initial` directly (or `Age Gate`, if
+  `age_gate` were given instead -- that chain-building logic is what decides `Initial`'s target).
+- **`Condition Onset`** (`ConditionOnset`, `codes = list(condition_code)`,
+  `target_encounter = "Diagnosis Encounter"`).
+- **`Diagnosis Encounter`** (`Encounter`, `wellness = TRUE` because `diagnosis = "wellness"` --
+  it would be `encounter_class = <encounter_class>` for `diagnosis = "standalone"`).
+- **`End Encounter`** (`EncounterEnd`) -- routes to `Condition Resolves Delay` because
+  `resolves_after` was given (it would route straight to `Terminal` otherwise, or split
+  probabilistically to a `Death` state via a `distributed_transition` if `death` were given
+  instead).
+- **`Condition Resolves Delay`** / **`Condition Resolves`** (`Delay` + `ConditionEnd`) -- present
+  only because `resolves_after` was given; omitting it leaves the condition chronic.
+
+## The same shape, hand-composed
+
+Building that exact graph with `build_module()` + `create_state_settings()` means writing out
+every state and transition the recipe generated for you:
+
+```{r hand-composed}
+composed_states <- list(
+  "Onset Delay" = create_state_settings("Delay",
+    range = create_component_settings("range", low = 1, high = 4, unit = "weeks"),
+    transition = create_transition_settings("direct", to = "Condition Onset")),
+
+  "Condition Onset" = create_state_settings("ConditionOnset",
+    codes = list(condition_code),
+    target_encounter = "Diagnosis Encounter",
+    transition = create_transition_settings("direct", to = "Diagnosis Encounter")),
+
+  "Diagnosis Encounter" = create_state_settings("Encounter",
+    wellness = TRUE,
+    transition = create_transition_settings("direct", to = "End Encounter")),
+
+  "Condition Resolves Delay" = create_state_settings("Delay",
+    range = create_component_settings("range", low = 2, high = 6, unit = "weeks"),
+    transition = create_transition_settings("direct", to = "Condition Resolves")),
+
+  "Condition Resolves" = create_state_settings("ConditionEnd",
+    condition_onset = "Condition Onset",
+    transition = create_transition_settings("direct", to = "Terminal")),
+
+  "End Encounter" = create_state_settings("EncounterEnd",
+    transition = create_transition_settings("direct", to = "Condition Resolves Delay")),
+
+  Initial = create_state_settings("Initial",
+    transition = create_transition_settings("direct", to = "Onset Delay")),
+
+  Terminal = create_state_settings("Terminal")
+)
+
+composed_module <- build_module(
+  name = "Recipe vs. Compose Example",
+  states = composed_states,
+  remarks = c("Built via build_disease_module()."),
+  as_json = FALSE
+)
+```
+
+The insertion order above -- `Onset Delay`, `Condition Onset`, `Diagnosis Encounter`,
+`Condition Resolves Delay`, `Condition Resolves`, `End Encounter`, `Initial`, `Terminal` -- looks
+like an odd way to write a `states` list by hand (`Initial` sixth-to-last, not first). It's written
+in exactly the order `build_disease_module()`'s own source adds these states, for the identical
+check below. In your own hand-composed modules, order the list however reads clearest to you --
+Synthea resolves every state reference by *name*, never by position in the list, so state order
+has no effect on how a module behaves. It only affects two things, both cosmetic: the key order in
+pretty-printed JSON, and whether `identical()` on the R list says `TRUE`.
+
+## Proof: identical output
+
+Same `name`, same `remarks`, same `condition_code` object, same `gmf_version` default, same state
+insertion order -- so the two module lists should be exactly, structurally identical, not just
+"equivalent enough":
+
+```{r identical-check}
+identical(recipe_module, composed_module)
+```
+
+That's not a coincidence -- it's the point. `build_disease_module()` has no privileged access to
+anything; it produces exactly what you'd write by hand for this one shape, in this one order, and
+nothing more.
+
+## Where the recipe's edges are
+
+`build_disease_module()`'s parameter list -- `condition_code`, `diagnosis`, `encounter_class`,
+`onset_delay`, `age_gate`, `resolves_after`, `death` -- covers one condition, one encounter, and
+one linear path through it. The moment a module needs something that parameter list has no
+argument for, the recipe can't express it at all -- not awkwardly, not with a workaround, just not
+at all. Concretely, out of scope for `build_disease_module()`:
+
+- More than one `ConditionOnset` in the same module, or any branching between them
+- Any state type it doesn't call internally -- `Guard`, `MedicationOrder`, `Symptom`,
+  `CarePlanStart`, `Vaccine`, `Procedure`, ... (see `vignette("layers")`'s full list of 31)
+- `Logic` combinators for eligibility (`vignette("logic-and-guards")`) -- the recipe's only
+  built-in gate is a single flat `Age` check via `age_gate`
+- `distributed_transition`/`conditional_transition` branching beyond the one death/no-death split
+  it already knows how to build
+- `SetAttribute`, `Counter`, or anything involving person attributes at all
+  (`vignette("set-attribute-precedence")`)
+
+Extending the hand-composed version past what the recipe could ever express is just adding one
+more state -- e.g. prescribing an antihistamine during the encounter, something
+`build_disease_module()` has no parameter for whatsoever:
+
+```{r extended}
+extended_states <- composed_states
+extended_states[["Diagnosis Encounter"]] <- create_state_settings("Encounter",
+  wellness = TRUE,
+  transition = create_transition_settings("direct", to = "Prescribe Antihistamine"))
+extended_states[["Prescribe Antihistamine"]] <- create_state_settings("MedicationOrder",
+  codes = list(create_component_settings("code",
+    system = "RxNorm", code = "997219", display = "Cetirizine hydrochloride 10 MG Oral Tablet")),
+  reason = "Condition Onset",
+  transition = create_transition_settings("direct", to = "End Encounter"))
+
+extended_module <- build_module(name = "Extended Example", states = extended_states)
+```
+
+That call succeeds because `build_module()` never cared how its `states` list was assembled --
+by a recipe, by hand, or (as here) by taking a recipe's output and grafting one more state onto
+it.
+
+## When to reach for which
+
+Start with `build_disease_module()` when what you're building genuinely is "one condition, one
+encounter, optionally gated by age, optionally resolves or kills" -- it's less to type and
+produces the identical thing you'd have written anyway. Drop to `build_module()` the moment the
+shape stops fitting: multiple conditions, non-linear branching, any state type outside
+`ConditionOnset`/`Encounter`/`EncounterEnd`/`ConditionEnd`/`Delay`/`Guard`/`Death`, or anything
+involving `Logic` beyond a single `Age` gate. `example_compose.R` and
+`example_trial_emulation.R` are both entirely in `build_module()` territory -- neither
+fits the recipe's shape at all.
