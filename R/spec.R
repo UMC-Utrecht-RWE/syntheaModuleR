@@ -18,7 +18,7 @@
 #' are always caller-supplied, every time.
 #'
 #' @param name Module name.
-#' @param exposure_codes A `data.frame` with columns `option` (the arm name, e.g. `"abrysvo"`),
+#' @param exposure_codes A `data.frame` with columns `option` (the arm name, e.g. `"vaccine_a"`),
 #'   `code`, `display`, and `system` (or `coding_system`, used as a fallback column name so
 #'   `read_bridge_codelist()`'s output can be passed straight through).
 #' @param exposure_shares A named numeric vector covering every `exposure_codes$option` plus
@@ -50,7 +50,7 @@
 #' spec <- build_module_spec(
 #'   "vaccine_safety",
 #'   exposure_codes = exposure_codes, exposure_shares = c(
-#'     abrysvo = 0.25, arexvy = 0.25, other_rsv = 0.05, comparator = 0.45
+#'     vaccine_a = 0.25, vaccine_b = 0.25, other_vaccine = 0.05, comparator = 0.45
 #'   ),
 #'   outcome_codes = aesi_codes, outcome_probability = 0.03,
 #'   outcome_delay = list(low = 0, high = 1460, unit = "days")

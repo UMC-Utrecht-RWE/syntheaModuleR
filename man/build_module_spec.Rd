@@ -20,7 +20,7 @@ build_module_spec(
 \arguments{
 \item{name}{Module name.}
 
-\item{exposure_codes}{A \code{data.frame} with columns \code{option} (the arm name, e.g. \code{"abrysvo"}),
+\item{exposure_codes}{A \code{data.frame} with columns \code{option} (the arm name, e.g. \code{"vaccine_a"}),
 \code{code}, \code{display}, and \code{system} (or \code{coding_system}, used as a fallback column name so
 \code{read_bridge_codelist()}'s output can be passed straight through).}
 
@@ -70,7 +70,7 @@ are always caller-supplied, every time.
 spec <- build_module_spec(
   "vaccine_safety",
   exposure_codes = exposure_codes, exposure_shares = c(
-    abrysvo = 0.25, arexvy = 0.25, other_rsv = 0.05, comparator = 0.45
+    vaccine_a = 0.25, vaccine_b = 0.25, other_vaccine = 0.05, comparator = 0.45
   ),
   outcome_codes = aesi_codes, outcome_probability = 0.03,
   outcome_delay = list(low = 0, high = 1460, unit = "days")
