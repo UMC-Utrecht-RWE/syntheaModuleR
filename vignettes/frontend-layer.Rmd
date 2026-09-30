@@ -1,0 +1,361 @@
+---
+title: "The Frontend Layer: From One Condition to a Full Protocol"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{The Frontend Layer: From One Condition to a Full Protocol}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+`vignette("layers")` and `vignette("cohort-building")` build modules with the Engine layer
+directly: every state gets its own `create_state_settings()` call, and every transition target is
+a hand-typed state name. That's the right level when you need exact control, but it gets verbose
+fast once a module has more than a handful of states.
+
+The **Frontend layer** (`blocks.R`, `combinators.R`) sits on top of the Engine layer and adds
+nothing to the JSON grammar itself -- every function here still only ever emits
+`create_state_settings()` output under the hood. What it adds is a shared contract, a **fragment**:
+
+```r
+list(states, entry, exit)
+```
+
+a named list of Engine-layer states, the name of the state to route *into* (`entry`), and the name
+of the state whose transition is still unresolved (`exit`) -- left pointing at the literal
+placeholder `"__PENDING__"` until a combinator or `build_cohort_module()` patches it. Every
+`create_*()` leaf in `blocks.R` returns one; every combinator in `combinators.R` consumes one or
+more and returns a new one. Because the contract never changes, fragments nest arbitrarily deep:
+the output of `pathways()` is exactly as valid an input to `chain()` or another `pathways()` as a
+single `create_condition()` call is.
+
+This vignette builds up from the smallest possible fragment to a full protocol-shaped cohort
+module, using worked examples modeled on real observational study protocols. Every medical code
+used below is an illustrative placeholder, not verified against a real codeset -- the same
+disclaimer `vignette("cohort-building")` carries for its own example codes.
+
+```{r setup}
+library(syntheaModuleR)
+```
+
+## Level 1: the smallest fragment -- one condition
+
+`create_condition()` is a leaf: onset, diagnosis encounter, optional resolution, wrapped as one
+fragment. `build_cohort_module()` is the Frontend layer's finisher -- the only place `Initial`/
+`Terminal` get invented -- so a single leaf is already a complete module:
+
+```{r level1}
+diabetes_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "44054006", display = "Diabetes mellitus type 2 (disorder)"
+)
+
+cohort_v1 <- create_condition("Diabetes", diabetes_code, diagnosis = "wellness")
+cat(build_cohort_module("Diabetes Cohort", cohort_v1))
+```
+
+Compare this to `vignette("cohort-building")`'s step 1: same four clinical states (onset,
+encounter, encounter end, terminal), but here they came from one function call instead of four
+`create_state_settings()` calls plus manually wiring `Initial`/`Terminal`.
+
+## Level 2: `chain()`/`add()` -- sequencing two fragments
+
+`chain()` wires each fragment's `exit` to the next fragment's `entry`; `add()` is the same thing,
+spelled for piping onto something you already have. Adding a chronic medication after the
+diagnosis is one more leaf and one `add()`:
+
+```{r level2}
+metformin_code <- create_component_settings("code",
+  system = "RxNorm", code = "860975", display = "Metformin hydrochloride 500 MG Oral Tablet"
+)
+
+cohort_v2 <- create_condition("Diabetes", diabetes_code, diagnosis = "wellness") |>
+  add(create_medication("Metformin", metformin_code, condition = "Diabetes", duration = "long"))
+
+cat(build_cohort_module("Diabetes Cohort", cohort_v2))
+```
+
+`create_medication()`'s `condition = "Diabetes"` resolves as the `MedicationOrder`'s `reason` --
+it's the same string as `create_condition()`'s own `label` above, not a coincidence: the onset
+state's name *is* the handle other blocks reference.
+
+## Level 3: `pathways()` -- probability-weighted exposure arms
+
+Real cohorts are rarely one drug for everyone. `pathways()` takes a named list of fragments (an
+entry can be `NULL` for "nothing happens on this arm"), a matching `shares` vector, and an optional
+`attribute` that auto-tags which arm a patient went through -- one `distributed_transition` "choice"
+state fanning out, one "join" state everything rejoins into:
+
+```{r level3}
+sulfonylurea_code <- create_component_settings("code",
+  system = "RxNorm", code = "310488", display = "Glipizide 5 MG Oral Tablet"
+)
+
+first_line <- pathways("First-Line Treatment",
+  options = list(
+    metformin    = create_medication("Metformin", metformin_code, condition = "Diabetes", duration = "long"),
+    sulfonylurea = create_medication("Sulfonylurea", sulfonylurea_code, condition = "Diabetes", duration = "long"),
+    none         = NULL
+  ),
+  shares = c(metformin = 0.5, sulfonylurea = 0.3, none = 0.2),
+  attribute = "diabetes_regimen"
+)
+
+cohort_v3 <- chain(create_condition("Diabetes", diabetes_code, diagnosis = "wellness"), first_line)
+cat(build_cohort_module("Diabetes Cohort", cohort_v3))
+```
+
+As in `vignette("cohort-building")`'s step 2, `"none"` isn't a flag set afterward -- it's an arm
+that never issues a `MedicationOrder` at all, expressed here as a bare `NULL` instead of a fourth
+state.
+
+## Level 4: switching mid-pathway -- fragments nest
+
+`vignette("cohort-building")`'s step 3 redirects a state by hand to add a switching sub-graph
+partway through. With the Frontend layer, that sub-graph is just another fragment, and "partway
+through" is just `add()`ing it onto the metformin arm *before* that arm is handed to `pathways()`:
+
+```{r level4}
+third_agent_code <- create_component_settings("code",
+  system = "RxNorm", code = "1545653", display = "Empagliflozin 25 MG Oral Tablet"
+)
+
+metformin_arm <- create_medication("Metformin", metformin_code, condition = "Diabetes", duration = "long") |>
+  add(create_delay(6, 18, "months", label = "Treatment Review Delay")) |>
+  add(pathways("Metformin Switch",
+    options = list(
+      continues = NULL,
+      switches_sulfonylurea = create_discontinue("Discontinue Metformin For Sulfonylurea", medication = "Metformin") |>
+        add(create_medication("Switch To Sulfonylurea", sulfonylurea_code, condition = "Diabetes", duration = "long")),
+      switches_other = create_discontinue("Discontinue Metformin For Third Agent", medication = "Metformin") |>
+        add(create_medication("Switch To Third Agent", third_agent_code, condition = "Diabetes", duration = "long")),
+      discontinues = create_discontinue("Discontinue Metformin", medication = "Metformin")
+    ),
+    shares = c(continues = 0.60, switches_sulfonylurea = 0.15, switches_other = 0.15, discontinues = 0.10)
+  ))
+
+first_line_v4 <- pathways("First-Line Treatment",
+  options = list(
+    metformin = metformin_arm,
+    sulfonylurea = create_medication("Sulfonylurea", sulfonylurea_code, condition = "Diabetes", duration = "long"),
+    none = NULL
+  ),
+  shares = c(metformin = 0.5, sulfonylurea = 0.3, none = 0.2),
+  attribute = "diabetes_regimen"
+)
+
+cohort_v4 <- chain(create_condition("Diabetes", diabetes_code, diagnosis = "wellness"), first_line_v4)
+```
+
+Nothing about `pathways()` or `chain()` changed between level 3 and level 4 -- only the fragment
+passed in as the `metformin` option got more elaborate. That's the point of the fragment contract:
+a combinator never needs to know whether an option is a single `create_medication()` call or an
+entire nested `pathways()` sub-graph three levels deep.
+
+## Level 5: `classify()` -- classify by record, not by path
+
+`diabetes_regimen` (set by `pathways()`'s `attribute =`) records *which arm a patient took*, not
+*what's true about their medication record right now* -- `vignette("cohort-building")`'s step 4
+makes exactly this point: the discontinued-metformin pathway still carries the stale tag
+`"metformin"`. `classify()` is `pathways()`'s condition-driven twin: instead of a probability split,
+it routes on a `Logic` condition, with the **first** named option taken when the condition is true
+and the **second** the `else` fallback.
+
+```{r level5}
+on_any_diabetes_med <- create_logic_settings("Or", conditions = list(
+  create_logic_settings("ActiveMedication", codes = list(metformin_code)),
+  create_logic_settings("ActiveMedication", codes = list(sulfonylurea_code)),
+  create_logic_settings("ActiveMedication", codes = list(third_agent_code))
+))
+
+treatment_status <- classify("Treatment Status",
+  condition = on_any_diabetes_med,
+  options = list(
+    treated   = create_tag("Treated", attribute = "diabetes_cohort", value = "treated"),
+    untreated = create_tag("Untreated", attribute = "diabetes_cohort", value = "untreated")
+  )
+)
+
+cohort_v5 <- chain(
+  create_condition("Diabetes", diabetes_code, diagnosis = "wellness"),
+  first_line_v4, treatment_status
+)
+final_module <- build_cohort_module("Diabetes Cohort", cohort_v5, as_json = FALSE)
+isTRUE(validate_module(final_module))
+```
+
+Five combinator calls (`create_condition()`, `pathways()` nested inside `pathways()`, `classify()`,
+tied together with `chain()`) reproduce the entire growing example `vignette("cohort-building")`
+builds with eighteen individual `create_state_settings()` calls and several manual re-pointed
+`direct_transition`s -- same JSON shape, same validated module, far less to type or get wrong by
+hand.
+
+## Level 6: population eligibility, lifted from a real protocol
+
+Every example so far skipped *who gets into the cohort at all*. That's `create_population()` (a
+flat demographic `AND`) and `create_guard()` (anything else -- a condition that must pre-exist, a
+washout window, a composite `Or()`/`And()`/`Not()` tree).
+
+The example below is modeled on a paternal valproate exposure and offspring outcomes protocol. It
+was chosen deliberately: in this protocol, "contraindication" and "infertility" really are single,
+atomic, code-list-driven concepts, not composite algorithms (a criterion like "immunocompromised"
+often reads as one adjective in a protocol's summary text but turns out to be a multi-part
+definition -- check before modeling it as a single code list):
+
+```{r level6}
+epilepsy_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "84757009",
+  display = "Generalised epilepsy (disorder)"
+)
+valproate_allergy <- create_component_settings("code",
+  system = "SNOMED-CT", code = "428607008",
+  display = "Allergy to valproic acid (illustrative -- one of a longer contraindication codelist)"
+)
+hepatic_contraindication <- create_component_settings("code",
+  system = "SNOMED-CT", code = "197321007",
+  display = "Acute hepatic failure (disorder) -- illustrative; valproate is contraindicated in hepatic impairment"
+)
+male_infertility <- create_component_settings("code",
+  system = "SNOMED-CT", code = "237186005",
+  display = "Male infertility (disorder)"
+)
+vasectomy <- create_component_settings("code",
+  system = "SNOMED-CT", code = "16621005",
+  display = "Vasectomy (procedure) -- illustrative; a permanent-infertility procedure, not just a diagnosis"
+)
+
+valproate_population <- chain(
+  create_population("Demographic Eligibility",
+    age = list(operator = ">", quantity = 18, unit = "years"), gender = "M"
+  ),
+  create_guard(
+    create_logic_settings("ActiveCondition", codes = list(epilepsy_code)),
+    label = "Epilepsy Diagnosis Present"
+  ),
+  create_guard(
+    create_logic_settings("Not",
+      condition =
+        create_logic_settings("ActiveCondition", codes = list(valproate_allergy, hepatic_contraindication))
+    ),
+    label = "Exclude Valproate-Levetiracetam Contraindication"
+  ),
+  create_guard(
+    create_logic_settings("Not",
+      condition =
+        create_logic_settings("Or", conditions = list(
+          create_logic_settings("ActiveCondition", codes = list(male_infertility)),
+          create_logic_settings("ActiveCondition", codes = list(vasectomy))
+        ))
+    ),
+    label = "Exclude Infertility"
+  )
+)
+```
+
+`chain()` on four fragments here does the same job it did sequencing clinical states earlier --
+`create_population()` returns `NULL` if every filter is omitted (a true no-op `chain()` silently
+skips), and each `create_guard()` is a `Guard` state that re-tests its condition every timestep
+until it passes, not a one-shot branch. This fragment isn't a complete module by itself (nothing
+ends its `exit`'s pending transition yet) -- it's a population gate meant to be `chain()`ed in
+front of whatever the rest of the module does, exactly like every clinical fragment above.
+
+## Level 7: putting it together -- a full protocol-shaped module
+
+The checklist's pipeline runs population (section 1) -> condition -> exposure (section 4) ->
+switching (section 5) -> outcome/follow-up (sections 6-7) -> final classification (section 8). The
+valproate protocol itself supplies two more shapes worth showing that none of the levels above
+needed yet:
+
+- **An active-comparator exposure**, not an untreated arm -- the protocol uses levetiracetam
+  "since epileptic patients are unlikely left untreated." That's `pathways()` with two medication
+  arms and no `NULL` option, unlike the diabetes example's `"none"` arm above.
+- **Gap-tolerant exposure accumulation** -- the checklist flags "a refill gap of up to N days
+  doesn't count as discontinuation" as the one shape needing `create_counter()` +
+  `repeat_until()` rather than a plain `create_medication()`. `repeat_until()` is the one
+  combinator that wires a transition *backward*: it runs a `body` fragment once, checks an `until`
+  condition, and only exits the loop once that condition is satisfied.
+
+```{r level7}
+valproate_code <- create_component_settings("code",
+  system = "RxNorm", code = "9825",
+  display = "Valproic acid (illustrative)"
+)
+levetiracetam_code <- create_component_settings("code",
+  system = "RxNorm", code = "114477",
+  display = "Levetiracetam (illustrative active comparator)"
+)
+hepatic_outcome_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "235856003",
+  display = "Hepatic impairment (disorder) -- illustrative safety outcome"
+)
+
+# Gap-tolerant persistence: check in every 30 days: reaching 6 qualifying checks (~6 months of
+# refills without a disqualifying gap) is this illustrative stand-in for "still persistent."
+persistence_loop <- repeat_until(
+  body = chain(
+    create_delay(30, 30, "days", label = "Refill Window"),
+    create_counter("valproate_refill_checks", action = "increment", label = "Count Refill Check")
+  ),
+  until = create_logic_settings("Attribute",
+    attribute = "valproate_refill_checks",
+    operator = ">=", value = 6
+  ),
+  label = "Valproate Persistence"
+)
+
+exposure_arm <- pathways("Exposure Arm",
+  options = list(
+    valproate = create_medication("Valproate", valproate_code,
+      condition = "Epilepsy Diagnosis Present", duration = "long"
+    ) |>
+      add(persistence_loop),
+    levetiracetam = create_medication("Levetiracetam", levetiracetam_code,
+      condition = "Epilepsy Diagnosis Present", duration = "long"
+    )
+  ),
+  shares = c(valproate = 0.5, levetiracetam = 0.5),
+  attribute = "exposure_arm"
+)
+
+follow_up_cap <- create_delay(90, 90, "days", label = "Administrative Follow-Up Cap")
+
+outcome_status <- classify("Outcome Status",
+  condition = create_logic_settings("ActiveCondition", codes = list(hepatic_outcome_code)),
+  options = list(
+    outcome    = create_tag("Outcome Occurred", attribute = "outcome_status", value = "event"),
+    no_outcome = create_tag("No Outcome", attribute = "outcome_status", value = "censored")
+  )
+)
+
+protocol_module <- chain(valproate_population, exposure_arm, follow_up_cap, outcome_status)
+final <- build_cohort_module("Valproate vs Levetiracetam in Epilepsy", protocol_module, as_json = FALSE)
+isTRUE(validate_module(final))
+length(final$states)
+```
+
+Note `condition = "Epilepsy Diagnosis Present"` on both `create_medication()` calls: it resolves
+against the `Guard` state of that name from `valproate_population` -- `MedicationOrder.reason`
+resolution falls back to "a `ConditionOnset` state of that name," but here epilepsy is a
+*pre-existing* condition being checked, not one this module diagnoses, so there's no
+`create_condition()` state named `"Epilepsy Diagnosis Present"` for it to resolve to cleanly; the
+Engine's own resolution order (`vignette("state-reference")`) also tries a plain person attribute
+first, which this population `Guard`'s label happens not to set -- worth flagging deliberately
+(the same way the checklist's own worked examples flag every simplification) since it's the kind
+of subtlety `validate_module()`'s state-name-reference check catches for *transition* targets but
+has no way to catch for a `reason` string, which is free text checked at generation time by
+Synthea, not at module-build time by this toolkit.
+
+## Where to go from here
+
+Every level here used a fragment straight out of `blocks.R`, composed with one of the four
+combinators. Nothing in `pathways()`/`classify()`/`repeat_until()`/`chain()` cares how deep or
+shallow the fragments underneath them are -- level 4's switching sub-graph inside a `pathways()`
+option and level 7's `repeat_until()` loop inside a *different* `pathways()` option compose the
+same way a single leaf does. When adapting a real study protocol instead of the illustrative
+diabetes/valproate examples here, work through it section by section -- population eligibility,
+exposure, follow-up, outcomes -- and pick the matching leaf or combinator for each.

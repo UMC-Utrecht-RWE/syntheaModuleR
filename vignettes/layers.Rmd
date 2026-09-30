@@ -1,0 +1,268 @@
+---
+title: "The Five Layers: Components, Logic, Transitions, States, Modules"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{The Five Layers: Components, Logic, Transitions, States, Modules}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## What this package builds
+
+[Synthea](https://github.com/synthetichealth/synthea) generates synthetic patients by walking
+each simulated life through a **Generic Module Framework (GMF)** module: a JSON state machine
+authored as a file under `src/main/resources/modules/`. This package does not run Synthea -- it
+only produces that JSON. Every field name and constraint below comes directly from Synthea's Java
+engine (`org.mitre.synthea.engine`), not from guessing at example files.
+
+A module is one JSON object with a `states` map. Everything nested inside those states -- the
+predicates that gate a transition, the transitions themselves, and the small value shapes like a
+diagnosis code or a random duration -- is built by one of this package's five layers:
+
+```
+components  ->  logic  ->  transitions  ->  states  ->  module
+   (values)      (predicates)  (edges)        (nodes)     (the graph)
+```
+
+That arrow diagram is a *nesting* order -- each thing on the left can appear inside the thing to
+its right. It's not the order this vignette introduces them in. `states` is the layer you'll
+actually spend most of your time writing -- it's the list you hand to `build_module()`, and the
+other three (components, logic, transitions) only exist to fill in a state's fields. So this
+vignette starts there, treats components/logic/transitions as black boxes at first (with a
+one-line pointer to where each is properly explained), and only unpacks them afterward.
+
+Each layer has exactly **one** builder function, not one function per type. The type you want
+(`"ConditionOnset"`, `"code"`, `"Age"`, `"direct"`, ...) is just its first argument; an internal
+schema table decides which other arguments are required, optional, or not applicable for that
+type, and raises a clear error if you get it wrong.
+
+```{r setup}
+library(syntheaModuleR)
+```
+
+## States -- the nodes of the graph
+
+**Function:** `create_state_settings(type, ..., transition = NULL)`
+
+States are the primary building block of a module -- a named list of these is what you assemble
+by hand and hand to `build_module()` at the end of this vignette. There are 31 state types; each
+has its own required/optional fields, plus one extra dimension every other layer lacks: whether a
+`transition` is `required`, `forbidden` (`Terminal` only), or `optional` (`Observation`, when
+nested inside a `MultiObservation`/`DiagnosticReport` rather than used as a standalone state).
+
+A state's fields are often filled in with the other three layers. Here, `codes` takes a
+`component` (a `code`, explained in the next section) and `transition` takes a `transition`
+(explained two sections down) -- for now, just note that both are themselves built with this
+package's own small builder functions, not written as raw lists:
+
+```{r states-conditiononset}
+strep_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "43878008", display = "Streptococcal sore throat (disorder)"
+)
+
+onset <- create_state_settings("ConditionOnset",
+  codes = list(strep_code),
+  target_encounter = "Diagnosis Encounter",
+  transition = create_transition_settings("direct", to = "Diagnosis Encounter")
+)
+str(onset)
+```
+
+A `Guard` is the one state built specifically to hold a `logic` condition (its `allow` field,
+explained in the "Logic" section below). It re-tests `allow` every timestep until it passes --
+unlike a conditional transition, which is evaluated once, at the moment the state is reached:
+
+```{r states-guard}
+adult <- create_logic_settings("Age", operator = ">=", quantity = 18, unit = "years")
+
+age_gate <- create_state_settings("Guard",
+  allow = adult,
+  transition = create_transition_settings("direct", to = "Condition Onset")
+)
+```
+
+Two field names are deliberately reused with a different meaning depending on `type`, rather than
+inventing type-prefixed names for every field: `model` is a `Physiology` state's model name, but a
+`Device` state's model *number*; `series` is a list of `Series` settings for `ImagingStudy`, but a
+plain dose-number integer for `Vaccine`. Also worth flagging explicitly since it's easy to
+transpose: `Device.code` is **singular** (one `Code`), while `DeviceEnd.codes` is **plural** (a
+list) -- same root word, different shape.
+
+`ConditionOnset` and `Guard` are only two of the 31 state types -- `vignette("state-reference")`
+covers all 31, most of which don't otherwise appear in any vignette.
+
+## Components -- the value shapes
+
+**Function:** `create_component_settings(component, ...)`
+
+Components are not states or transitions in their own right; they're small structured values
+*nested inside* a state or logic field -- a diagnosis code, a numeric range, a random duration. In
+the JSON they carry no discriminator field of their own (a `Code` is just
+`{system, code, display}`); `component` is purely an R-side selector for picking which shape you
+want. This is the function that built `strep_code`, used above without explanation:
+
+```{r components-code}
+str(strep_code)
+```
+
+A `range` is the shape a `Delay`'s `range` or a `VitalSign`'s `range` expects:
+
+```{r components-range}
+create_component_settings("range", low = 3, high = 7, unit = "days")
+```
+
+The one irregular component is `distribution` (`Distribution.java`). Its `kind` (`"EXACT"`,
+`"UNIFORM"`, `"GAUSSIAN"`, `"EXPONENTIAL"`, `"TRIANGULAR"` -- upper case, because Gson serializes
+Java enums by `.name()`) selects which *other* arguments become entries in its `parameters` map,
+and those keys are **not** snake_cased -- `standardDeviation` stays camelCase because
+`parameters` is a `HashMap<String, Double>`, not a set of declared Java fields:
+
+```{r components-distribution}
+create_component_settings("distribution", kind = "GAUSSIAN", mean = 5, standardDeviation = 1.5)
+```
+
+Any field the schema marks as an array -- `codes`, `conditions`, transition `options`, a
+component's `attributes` -- must always be passed as a list, even for one item
+(`codes = list(create_component_settings("code", ...))`). This "array rule" is enforced with an
+error rather than silently auto-wrapped, since `jsonlite` would otherwise sometimes collapse a
+length-1 R list into a bare JSON scalar instead of a one-element array.
+
+`code`, `range`, and `distribution` are only three of the eight component shapes --
+`vignette("component-reference")` covers all eight, including the five (`exact`, `date_input`,
+`sampled_data`, `attachment`, `io_mapper`) that don't otherwise appear anywhere in this package's
+vignettes.
+
+## Logic -- the predicate sublanguage
+
+**Function:** `create_logic_settings(condition_type, ...)`
+
+Logic conditions are only meaningful where a state or transition explicitly asks for one: a
+`Guard` state's `allow` field (as used above), or the `condition` inside a
+`conditional_transition`/`complex_transition` option. Unlike components, a Logic object *does*
+carry a discriminator field in the JSON -- `condition_type`. This is the function that built
+`adult`, used above without explanation:
+
+```{r logic-age}
+str(adult)
+```
+
+Combinators (`And`/`Or`/`AtLeast`/`AtMost`) nest other `create_logic_settings()` results via
+`conditions = list(...)`; `Not` nests a single one via `condition = <result>`:
+
+```{r logic-and}
+adult_and_symptomatic <- create_logic_settings("And", conditions = list(
+  adult,
+  create_logic_settings("Symptom", symptom = "Sore Throat", operator = ">=", value = 20)
+))
+```
+
+A few Logic types have an exactly-one-of constraint worth knowing up front: `Observation` needs
+either `codes` or `referenced_by_attribute`, never both or neither -- and the Java engine throws a
+`NullPointerException`, not a graceful failure, if the referenced observation doesn't exist yet
+and the operator isn't `"is nil"`/`"is not nil"`.
+
+`Age` and the combinators above are only 6 of the 21 `condition_type`s --
+`vignette("logic-reference")` covers the other 15 leaf predicates (`Gender`, `Date`,
+`ActiveAllergy`, `PriorState`, and more).
+
+## Transitions -- the six kinds of edge
+
+**Function:** `create_transition_settings(kind, ...)`
+
+Every non-`Terminal` state needs exactly one transition -- you've already seen `"direct"`
+transitions built inline while constructing states above. Transitions are the odd layer out: the
+JSON key itself (`direct_transition`, `conditional_transition`, ...) is the discriminator, not a
+field inside a fixed-shape object -- so `create_transition_settings()`'s job includes restructuring
+its input into the right shape, not just validating it.
+
+```{r transitions-direct}
+create_transition_settings("direct", to = "Diagnosis Encounter")
+```
+
+```{r transitions-conditional}
+create_transition_settings("conditional", options = list(
+  list(condition = adult, transition = "Adult Dosing"),
+  list(transition = "Pediatric Dosing") # condition omitted on the last option = the else branch
+))
+```
+
+`distributed` picks an option at random; the `distribution` on each option is either a plain
+number or a `NamedDistribution` (`list(attribute =, default =)`) that reads the probability from a
+person attribute at runtime:
+
+```{r transitions-distributed}
+create_transition_settings("distributed", options = list(
+  list(transition = "Resolves", distribution = 0.9),
+  list(transition = "Death", distribution = 0.1)
+))
+```
+
+`complex` combines both ideas -- each option is gated by an optional `condition` and is itself
+either a direct `transition` or a nested `distributions` list. `lookup_table` and `type_of_care`
+exist too (routing via an external CSV, and via insurance/telemedicine-adoption date,
+respectively) but this package only wires the reference; it doesn't generate the CSV or model the
+config-driven routing logic itself. `vignette("transition-reference")` has worked examples for
+all three.
+
+## Module -- assembling and validating the graph
+
+**Functions:** `build_module()`, `validate_module()`, `write_module_json()`
+
+`build_module(name, states, ...)` takes a named list of states -- any mix, any order, any number,
+built with `create_state_settings()` -- and assembles the module object. It always runs
+`validate_module()` before returning (unless you pass `validate = FALSE`), which re-implements the
+engine's own load-time invariants entirely at the graph level:
+
+- `states` must contain exactly one entry literally named `"Initial"`.
+- `states` must contain at least one entry with `type = "Terminal"` (its name is free).
+- Every non-`Terminal` state has exactly one transition property.
+- Every state-name reference anywhere (a transition target, `target_encounter`,
+  `condition_onset`, `medication_order`, `careplan`, `allergy_onset`, `device`, ...) resolves to a
+  state that actually exists.
+
+```{r module-minimal}
+states <- list(
+  Initial = create_state_settings("Initial",
+    transition = create_transition_settings("direct", to = "Age Gate")
+  ),
+  "Age Gate" = age_gate,
+  "Condition Onset" = onset,
+  "Diagnosis Encounter" = create_state_settings("Encounter",
+    wellness = TRUE,
+    transition = create_transition_settings("direct", to = "Terminal")
+  ),
+  Terminal = create_state_settings("Terminal")
+)
+
+module_json <- build_module(name = "Layers Vignette Example", states = states)
+cat(module_json)
+```
+
+`write_module_json()` accepts either form of `build_module()`'s output -- the default JSON string,
+or the R list you get back with `as_json = FALSE` -- and writes it to disk, re-validating first if
+you handed it a list. Nothing here has been run through the actual Java engine: `validate_module()`
+is this package's best-effort port of the engine's own checks, but before relying on a generated
+module, drop it into a real Synthea checkout and run it
+(`cp <file> src/main/resources/modules/ && ./run_synthea -m <name> -p <n>`).
+
+## Where each layer's output ends up
+
+Reading the module above from the inside out shows how the five layers actually nest: a
+`component` (the code) sits inside a `state` (`ConditionOnset`'s `codes`); a `logic` condition
+(the age check) sits inside a `state` (`Guard`'s `allow`); a `transition` sits inside every
+non-`Terminal` `state`; and the whole `states` list is what `module` assembles and validates.
+Nothing here composes the other direction -- a `component` never contains a `state`, and a
+`transition` never contains a `module`. That's the nesting diagram from the top of this vignette;
+this vignette just introduced the pieces state-first, in the order you'll actually write them,
+rather than bottom-up.
+
+For a full worked example that puts many of these state types together end to end, see
+`vignette("cohort-building")` (the generic `build_module()` workflow, grown incrementally) and
+`vignette("frontend-layer")` (the same kind of module composed from fragments).

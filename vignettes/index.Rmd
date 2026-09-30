@@ -1,0 +1,127 @@
+---
+title: "Package Overview"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Package Overview}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This package builds valid [Synthea](https://github.com/synthetichealth/synthea) Generic Module
+Framework (GMF) module JSON files from R. It does not run Synthea -- it only produces the JSON
+file; generating patients from it needs a real Synthea checkout (`./run_synthea -m <name>`). Every
+field name and constraint it knows about was extracted directly from Synthea's Java engine
+(`org.mitre.synthea.engine`), not guessed from example modules.
+
+Five small functions, one per layer, cover the whole grammar:
+
+```
+components  ->  logic  ->  transitions  ->  states  ->  module
+```
+
+That arrow shows *nesting* order -- each thing on the left can appear inside the thing to its
+right. It's not the order you'll actually work in: `states` is what you write the most, since a
+named list of states is what you hand to `build_module()` directly; components, logic, and
+transitions only exist to fill in a state's fields. `vignette("layers")` introduces the five
+layers in that states-first order, not bottom-up.
+
+```{r setup}
+library(syntheaModuleR)
+```
+
+The smallest possible valid module is just the two states every module needs -- `Initial` and one
+`Terminal` -- wired directly together:
+
+```{r minimal}
+minimal_module <- build_module(
+  name = "Minimal Example",
+  states = list(
+    Initial = create_state_settings("Initial",
+      transition = create_transition_settings("direct", to = "Terminal")
+    ),
+    Terminal = create_state_settings("Terminal")
+  )
+)
+cat(minimal_module)
+```
+
+Everything else this package can do is variations and elaborations on that same pattern: more
+states, richer transitions, `Logic` conditions gating them, `Component` value shapes filling them
+in. The vignettes below build that up states-first, the same way you'd actually write a module.
+
+## Read these in order
+
+1. **[The Five Layers: Components, Logic, Transitions, States, Modules](layers.html)** -- start
+   here. Starts with `States` -- the layer you'll actually spend the most time writing -- then
+   unpacks what nests inside a state (`Components`, `Logic`, `Transitions`), before assembling
+   everything into a `Module` at the end.
+2. **[State Reference: All 31 State Types](state-reference.html)** -- the complete reference for
+   `create_state_settings()`, including the states -- `CallSubmodule`, `Physiology`, `Counter`,
+   `AllergyOnset`, `CarePlanStart`, `Vaccine`, and more -- `vignette("layers")` doesn't cover.
+3. **[SetAttribute: Value Source Precedence](set-attribute-precedence.html)** -- the one state
+   whose multiple value-source fields (`value`, `range`, `expression`, `distribution`, ...) are
+   **not** mutually exclusive at build time, and the precedence order the Java engine uses to
+   pick a winner when more than one is given.
+4. **[Component Reference: All Eight Value Shapes](component-reference.html)** -- the complete
+   reference for `create_component_settings()`'s eight shapes, including the five (`exact`,
+   `date_input`, `sampled_data`, `attachment`, `io_mapper`) `vignette("layers")` doesn't cover.
+5. **[The Distribution Component: Modeling Randomness](distribution.html)** -- the one
+   irregular component shape (`EXACT`/`UNIFORM`/`GAUSSIAN`/`EXPONENTIAL`/`TRIANGULAR`), and where
+   it nests inside `Delay`, `VitalSign`, and `Procedure`.
+6. **[Transition Reference: All Six Kinds](transition-reference.html)** -- the complete
+   reference for `create_transition_settings()`, including `complex`, `lookup_table`, and
+   `type_of_care`, which `vignette("layers")` only describes.
+7. **[Logic Reference: All 21 Predicate Types](logic-reference.html)** -- the complete reference
+   for `create_logic_settings()`'s leaf predicates -- `Gender`, `Date`, `PriorState`,
+   `ActiveAllergy`, and more -- that `vignette("logic-and-guards")` doesn't cover.
+8. **[Logic Combinators and Guards](logic-and-guards.html)** -- the predicate sublanguage in
+   depth: `And`/`Or`/`Not`/`AtLeast`/`AtMost`, and the `Guard` state that re-tests a condition
+   every timestep rather than branching once.
+9. **[build_disease_module() vs. build_module(): Recipe vs. Hand-Composed](recipe-vs-compose.html)**
+   -- the onset -> encounter -> resolve/death convenience recipe, proven byte-for-byte identical
+   to hand-composing the same shape, and exactly where its coverage ends.
+10. **[Building Cohorts Incrementally: Diagnosis, Treatment Pathways, and Switching](cohort-building.html)**
+    -- a worked, growing example: a diagnosis, a split into two first-line drugs (plus a
+    no-medication pathway), a subset that switches therapy or discontinues it, and a final
+    classification that reads the medication record instead of trusting the pathway a patient
+    took -- plus an explicit `validate_module()` check.
+11. **[The Frontend Layer: From One Condition to a Full Protocol](frontend-layer.html)** -- the
+    same cohort-building shape as above, but composed from `blocks.R`/`combinators.R` fragments
+    instead of individual `create_state_settings()` calls, growing from a single
+    `create_condition()` up to a full protocol-shaped module (population eligibility, an
+    active-comparator exposure, gap-tolerant persistence via `repeat_until()`, and a final
+    `classify()`) modeled on real observational study protocols.
+
+## Quick reference
+
+| Layer        | Function                          | Covered in                                    |
+|--------------|------------------------------------|------------------------------------------------|
+| States       | `create_state_settings()`          | [layers](layers.html), [state-reference](state-reference.html), [set-attribute-precedence](set-attribute-precedence.html) |
+| Components   | `create_component_settings()`      | [layers](layers.html), [component-reference](component-reference.html), [distribution](distribution.html) |
+| Logic        | `create_logic_settings()`          | [layers](layers.html), [logic-reference](logic-reference.html), [logic-and-guards](logic-and-guards.html) |
+| Transitions  | `create_transition_settings()`     | [layers](layers.html), [transition-reference](transition-reference.html) |
+| Module       | `build_module()`, `validate_module()`, `write_module_json()` | [layers](layers.html), [recipe-vs-compose](recipe-vs-compose.html) |
+| Recipe       | `build_disease_module()`           | [recipe-vs-compose](recipe-vs-compose.html)    |
+
+## Package layout
+
+```
+R/
+  components.R   .component_schema + .distribution_param_schema + create_component_settings()
+  logic.R        .logic_schema + create_logic_settings()
+  transitions.R  .transition_schema + create_transition_settings()
+  states.R       .state_schema + create_state_settings()
+  module.R       build_module(), validate_module(), write_module_json(),
+                 build_disease_module() (recipe), build_cohort_module() (Frontend finisher)
+  blocks.R       Frontend-layer leaf constructors (create_condition(), create_medication(), ...)
+  combinators.R  Frontend-layer combinators (chain()/add(), pathways(), classify(), repeat_until())
+```
+
+Every vignette in this package loads it with `library(syntheaModuleR)`.

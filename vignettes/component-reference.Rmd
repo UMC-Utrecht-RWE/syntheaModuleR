@@ -1,0 +1,126 @@
+---
+title: "Component Reference: All Eight Value Shapes"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Component Reference: All Eight Value Shapes}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+`vignette("layers")` introduces `create_component_settings()` and walks through three of its
+eight shapes (`code`, `range`, `distribution`) in enough depth to show how the function works.
+This vignette is the complete reference: one example for every shape, including the five
+(`exact`, `date_input`, `sampled_data`, `attachment`, `io_mapper`) that don't otherwise appear
+anywhere in this package's vignettes.
+
+```{r setup}
+library(syntheaModuleR)
+```
+
+## Quick reference
+
+| `component`   | Required                  | Optional                                                                 | Array fields |
+|---------------|---------------------------|----------------------------------------------------------------------------|---------------|
+| `code`        | `system`, `code`, `display` |                                                                            |               |
+| `range`       | `low`, `high`              | `unit`, `decimals`                                                        |               |
+| `exact`       | `quantity`                 | `unit`                                                                    |               |
+| `date_input`  | `year`, `month`, `day`     | `hour`, `minute`, `second`, `millisecond`                                 |               |
+| `sampled_data`| `origin_value`, `attributes` | `factor`, `lower_limit`, `upper_limit`, `decimal_format`                | `attributes`  |
+| `attachment`  |                            | `content_type`, `language`, `title`, `creation`, `height`, `width`, `frames`, `duration`, `pages`, and **exactly one of** `chart`, `url`, `data` | |
+| `distribution`| `kind`                     | `round`, plus `kind`-specific `parameters` -- see `vignette("distribution")` | |
+| `io_mapper`   | `type`                     | `from`, `to`, `from_list`, `from_exp`, `variance`, `vital_sign`            |               |
+
+## `code` and `range` (recap)
+
+Already introduced in `vignette("layers")` -- shown here just for completeness:
+
+```{r code-range}
+create_component_settings("code",
+  system = "SNOMED-CT", code = "444316003", display = "Seasonal allergic rhinitis (disorder)"
+)
+
+create_component_settings("range", low = 3, high = 7, unit = "days")
+```
+
+## `exact`
+
+The single-value counterpart to `range` -- one `quantity`, with an optional `unit`. It's the
+shape a `Procedure`'s `duration` or a `Death`'s `exact` expects:
+
+```{r exact}
+create_component_settings("exact", quantity = 30, unit = "minutes")
+```
+
+## `date_input`
+
+A calendar date/time, used where a `Date` Logic condition needs a literal point in time to
+compare against rather than an offset from the simulated "now". `year`, `month`, and `day` are
+required; the time-of-day fields are all optional and default to midnight if omitted:
+
+```{r date_input}
+create_component_settings("date_input", year = 2021, month = 3, day = 15, hour = 8, minute = 30)
+```
+
+## `sampled_data`
+
+Backs an `Observation`'s `sampled_data` field -- a time series of measurements (an HL7
+`SampledData`-shaped value) rather than a single point value, tagged with the attribute name(s)
+each sampled column corresponds to:
+
+```{r sampled_data}
+create_component_settings("sampled_data",
+  origin_value = 0, attributes = list("ecg_lead_ii"),
+  factor = 0.01, lower_limit = -200, upper_limit = 200, decimal_format = "0.00"
+)
+```
+
+## `attachment`
+
+An embedded chart, image, or file reference -- used inside an `Observation`'s `attachment`
+field. No field is individually required, but exactly one of `chart`, `url`, or `data` must be
+given; the Java engine's own `Attachment.validate()` rejects both zero and more than one, same as
+this package's `one_of` check:
+
+```{r attachment}
+create_component_settings("attachment",
+  url = "https://example.org/growth-chart.png", content_type = "image/png", title = "Growth Chart"
+)
+```
+
+```{r attachment-error, error = TRUE}
+create_component_settings("attachment",
+  chart = "base64-encoded-chart-data", url = "https://example.org/growth-chart.png"
+)
+```
+
+## `io_mapper`
+
+Only meaningful inside a `Physiology` state's `inputs`/`outputs` (see `vignette("layers")`'s note
+that `Physiology` is config-gated and out of scope for most modules). `type` selects an `IoType`
+(e.g. `"ATTRIBUTE"`, `"VITAL_SIGN"`) -- this package doesn't validate which strings are legal
+there, since only `IoMapper`'s core fields are modeled, not its nested `PreGenerator` type:
+
+```{r io_mapper}
+create_component_settings("io_mapper", type = "VITAL_SIGN", vital_sign = "Heart Rate", to = "heart_rate")
+```
+
+## `distribution`
+
+The one irregular shape -- exact-case `kind` values, a `parameters` map that isn't
+snake_cased -- gets a full vignette of its own: `vignette("distribution")`.
+
+## Where to go from here
+
+`vignette("layers")` shows how `code` and `range` nest inside real states
+(`ConditionOnset.codes`, `Delay.range`); `vignette("distribution")` does the same for
+`distribution`. The remaining shapes here -- `exact`, `date_input`, `sampled_data`, `attachment`,
+`io_mapper` -- are less commonly needed, so nesting them into a full worked module is left as an
+exercise: try building an `Observation` state with an `attachment`, or a `Procedure` with an
+`exact` duration, using `create_state_settings()` the same way `vignette("layers")` does.

@@ -1,0 +1,180 @@
+---
+title: "The Distribution Component: Modeling Randomness"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{The Distribution Component: Modeling Randomness}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette assumes you've read `vignette("layers")`. It goes deep on one component --
+`distribution` -- which `vignette("layers")` flagged as the one irregular shape in the whole
+toolkit, and worth a closer look on its own.
+
+```{r setup}
+library(syntheaModuleR)
+```
+
+## Why it's irregular
+
+Every other component (`code`, `range`, `exact`, ...) is a flat object whose field names are
+declared Java fields, so Gson's `LOWER_CASE_WITH_UNDERSCORES` policy rewrites them to
+snake_case -- which is exactly what this toolkit's field names already are everywhere else.
+
+`Distribution` (`Distribution.java`) breaks that pattern in two ways at once:
+
+1. Its `kind` field (`Distribution.Kind`, a Java enum) is serialized by `.name()`, not rewritten
+   by the naming policy -- so JSON values stay **exact-case upper**: `"GAUSSIAN"`, not
+   `"gaussian"` or `"Gaussian"`.
+2. Everything else it needs lives in a `parameters` map -- a `HashMap<String, Double>`, not a set
+   of declared fields -- so the naming policy never touches those keys either. `mean` and `low`
+   happen to already be lowercase, but `standardDeviation` stays camelCase.
+
+`create_component_settings("distribution", kind = ..., ...)` handles this with its own code path,
+separate from the generic schema-driven assembly every other component uses: `kind` selects a
+`.distribution_param_schema` entry, and every other argument you pass becomes a `parameters` map
+entry, validated against that entry's required/optional keys.
+
+## The five kinds
+
+| `kind`        | Required `parameters`   | Optional `parameters` |
+|---------------|--------------------------|------------------------|
+| `EXACT`       | `value`                  |                        |
+| `UNIFORM`     | `low`, `high`            |                        |
+| `GAUSSIAN`    | `mean`, `standardDeviation` | `min`, `max`        |
+| `EXPONENTIAL` | `mean`                   |                        |
+| `TRIANGULAR`  | `min`, `mode`, `max`     |                        |
+
+```{r exact}
+create_component_settings("distribution", kind = "EXACT", value = 5)
+```
+
+```{r uniform}
+create_component_settings("distribution", kind = "UNIFORM", low = 10, high = 20)
+```
+
+```{r gaussian}
+# min/max here clamp the sample to a range -- a truncated Gaussian, not a hard requirement.
+create_component_settings("distribution",
+  kind = "GAUSSIAN",
+  mean = 120, standardDeviation = 15, min = 90, max = 180
+)
+```
+
+```{r exponential}
+create_component_settings("distribution", kind = "EXPONENTIAL", mean = 30)
+```
+
+```{r triangular}
+create_component_settings("distribution", kind = "TRIANGULAR", min = 14, mode = 21, max = 28)
+```
+
+An optional `round` flag (a plain boolean, not a `parameters` entry) rounds the sampled value to
+the nearest integer -- useful when the value feeds something that shouldn't come out fractional,
+like a dose count:
+
+```{r round}
+create_component_settings("distribution", kind = "UNIFORM", low = 1, high = 4, round = TRUE)
+```
+
+## Two gotchas, live
+
+`kind` must match one of the five names above exactly -- lower- or mixed-case is rejected before
+it ever reaches JSON, since it wouldn't round-trip through the Java enum:
+
+```{r kind-case-error, error = TRUE}
+create_component_settings("distribution", kind = "gaussian", mean = 0, standardDeviation = 1)
+```
+
+And because `standardDeviation` is a real R argument name on `create_component_settings()` (not
+snake_case, unlike its neighbors), typing the snake_case version you'd reflexively type for every
+other field in this package doesn't get caught by this toolkit's own validation at all -- it's not
+a recognized argument, so R itself refuses the call:
+
+```{r snake-case-error, error = TRUE}
+create_component_settings("distribution", kind = "GAUSSIAN", mean = 0, standard_deviation = 1)
+```
+
+## Where `distribution` nests
+
+`distribution` is one option among several on a handful of states, and each state constrains it
+differently:
+
+| State       | Field's `one_of` group                              | Enforced by this package? |
+|-------------|-------------------------------------------------------|----------------------------|
+| `Delay`     | exactly one of `range`, `exact`, `distribution`        | Yes                        |
+| `VitalSign` | exactly one of `exact`, `range`, `expression`, `distribution` | Yes                |
+| `Procedure` | at most one of `duration`, `distribution`              | Yes                        |
+| `SetAttribute` | one value source among several (see precedence below) | No -- Java-engine runtime behavior only |
+| `Symptom`   | `exact`, `range`, `distribution` all just optional     | No constraint              |
+
+`Delay` and `VitalSign` are enforced with the same `one_of` machinery as every other constraint in
+this package -- pass two of them and `create_state_settings()` rejects the call before it ever
+reaches `build_module()`:
+
+```{r delay-oneof-error, error = TRUE}
+create_state_settings("Delay",
+  exact = create_component_settings("exact", quantity = 5, unit = "days"),
+  distribution = create_component_settings("distribution", kind = "EXACT", value = 5),
+  transition = create_transition_settings("direct", to = "Next")
+)
+```
+
+`SetAttribute` is the one exception worth calling out explicitly: it accepts `distribution`
+alongside `value`, `value_code`, `value_attribute`, `range`, `expression`, and `series_data`, but
+this package does not enforce a `one_of` on them, because the Java engine doesn't treat it as a
+validation error either -- it resolves value sources by precedence instead (first match wins):
+`expression` > `range` > `series_data` > `distribution` > `value_code` > `value_attribute` >
+literal `value`. Passing both `range` and `distribution` to a `SetAttribute` is valid, syntactically;
+`range` will just always win, silently.
+
+## Worked example: a two-dose delay and a sampled vital sign
+
+```{r worked-example}
+dose_interval <- create_component_settings("distribution",
+  kind = "TRIANGULAR",
+  min = 17, mode = 21, max = 28
+) # realistic real-world dosing window, peaked at the trial's 21 days
+
+bmi_sample <- create_component_settings("distribution",
+  kind = "GAUSSIAN",
+  mean = 27, standardDeviation = 5, min = 15, max = 50
+)
+
+states <- list(
+  Initial = create_state_settings("Initial",
+    transition = create_transition_settings("direct", to = "Record BMI")
+  ),
+  "Record BMI" = create_state_settings("VitalSign",
+    vital_sign = "BMI", unit = "kg/m2", distribution = bmi_sample,
+    transition = create_transition_settings("direct", to = "Dose Interval")
+  ),
+  "Dose Interval" = create_state_settings("Delay",
+    distribution = dose_interval, unit = "days",
+    transition = create_transition_settings("direct", to = "Terminal")
+  ),
+  Terminal = create_state_settings("Terminal")
+)
+
+module_json <- build_module(name = "Distribution Vignette Example", states = states)
+cat(module_json)
+```
+
+Both states validated against their own `one_of` constraint (each has exactly one value source),
+and `build_module()` validated the graph on top of that -- the same two-level check
+(`create_state_settings()` per-state, `validate_module()` graph-wide) every module in this package
+goes through.
+
+## Where to go from here
+
+`SetAttribute`'s full precedence chain (`expression` > `range` > `series_data` > `distribution` >
+`value_code` > `value_attribute` > `value`) deserves its own worked example, as does a
+side-by-side of `build_disease_module()`'s onset -> encounter -> resolve/death recipe against
+hand-composing the same shape with `build_module()` directly.

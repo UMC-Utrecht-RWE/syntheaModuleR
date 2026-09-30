@@ -1,0 +1,385 @@
+---
+title: "State Reference: All 31 State Types"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{State Reference: All 31 State Types}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+`vignette("layers")` introduces `create_state_settings()` with two state types
+(`ConditionOnset`, `Guard`); a handful of others get their own worked examples in
+`vignette("logic-and-guards")`, `vignette("distribution")`, and
+`vignette("set-attribute-precedence")`. This vignette is the complete reference for all 31 --
+most of which don't otherwise appear in any vignette at all.
+
+```{r setup}
+library(syntheaModuleR)
+
+# Local convenience for this vignette only -- not a package function.
+direct <- function(to) create_transition_settings("direct", to = to)
+```
+
+## Quick reference
+
+`transition` column: **req** = required, **forbid** = forbidden (`Terminal` only), **opt** =
+optional (`Observation`, only when nested inside `MultiObservation`/`DiagnosticReport`).
+
+| `type`            | Required                          | Array fields         | `transition` |
+|--------------------|-------------------------------------|------------------------|---------------|
+| `Initial`          |                                      |                        | req |
+| `Terminal`         |                                      |                        | forbid |
+| `Simple`           |                                      |                        | req |
+| `CallSubmodule`    | `submodule`                          |                        | req |
+| `Physiology`       | `model`, `solver`, `step_size`, `sim_duration`, `alt_direct_transition` | `inputs`, `outputs` | req |
+| `Guard`            | `allow`                              |                        | req |
+| `Delay`            | (one of `range`/`exact`/`distribution`) |                    | req |
+| `SetAttribute`     | `attribute`                          |                        | req |
+| `Counter`          | `attribute`, `action`                |                        | req |
+| `Encounter`        |                                      | `codes`                | req |
+| `EncounterEnd`     |                                      |                        | req |
+| `ConditionOnset`   | `codes`                              | `codes`                | req |
+| `ConditionEnd`     |                                      | `codes`                | req |
+| `AllergyOnset`     | `codes`                              | `codes`, `reactions`   | req |
+| `AllergyEnd`       |                                      | `codes`                | req |
+| `MedicationOrder`  | `codes`                              | `codes`                | req |
+| `MedicationEnd`    |                                      | `codes`                | req |
+| `CarePlanStart`    | `codes`                              | `codes`, `activities`, `goals` | req |
+| `CarePlanEnd`      |                                      | `codes`                | req |
+| `Procedure`        | `codes`                              | `codes`                | req |
+| `VitalSign`        | `vital_sign` (+ one of `exact`/`range`/`expression`/`distribution`) |  | req |
+| `Observation`      | `codes`                              | `codes`                | opt |
+| `MultiObservation` | `codes`, `observations`              | `codes`, `observations`| req |
+| `DiagnosticReport` | `codes`, `observations`              | `codes`, `observations`| req |
+| `ImagingStudy`     | `procedure_code`, `series`           | `series`                | req |
+| `Symptom`          | `symptom`                             |                        | req |
+| `Device`           | `code` (singular)                    |                        | req |
+| `DeviceEnd`        |                                      | `codes` (plural)        | req |
+| `SupplyList`       | `supplies`                            | `supplies`              | req |
+| `Death`            |                                      | `codes`                | req |
+| `Vaccine`          | `series` (dose number), `codes`      | `codes`                | req |
+
+A few reusable codes for the examples below:
+
+```{r shared-codes}
+strep_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "43878008", display = "Streptococcal sore throat (disorder)"
+)
+penicillin_code <- create_component_settings("code",
+  system = "RxNorm", code = "7980", display = "Penicillin"
+)
+acetaminophen_code <- create_component_settings("code",
+  system = "RxNorm", code = "313782", display = "Acetaminophen 325 MG Oral Tablet"
+)
+diabetes_careplan_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "698360004", display = "Diabetes self management plan"
+)
+```
+
+## Control flow
+
+`Initial`, `Terminal`, and `Guard` are recapped from `vignette("layers")`; `Delay` from
+`vignette("distribution")`. `Simple` is a plain pass-through node -- no fields, just a transition
+-- typically used as a routing point between branches.
+`CallSubmodule` hands control to another module file by path; this package doesn't check that
+the referenced submodule actually exists in the target Synthea checkout.
+
+```{r control-flow}
+create_state_settings("Initial", transition = direct("Next"))
+create_state_settings("Terminal")
+create_state_settings("Simple", transition = direct("Next"))
+create_state_settings("CallSubmodule",
+  submodule = "medications/otc_antihistamine",
+  transition = direct("Next")
+)
+create_state_settings("Guard", allow = create_logic_settings("True"), transition = direct("Next"))
+create_state_settings("Delay",
+  exact = create_component_settings("exact", quantity = 7, unit = "days"),
+  transition = direct("Next")
+)
+```
+
+`Physiology` is gated behind the `physiology.state.enabled` config flag (off by default), which
+is why `alt_direct_transition` is required -- it's the fallback path used whenever that flag is
+off. `model` and `solver` are free strings this package doesn't restrict:
+
+```{r physiology}
+create_state_settings("Physiology",
+  model = "BloodPressureModel.xml", solver = "rk4", step_size = 0.1, sim_duration = 1,
+  alt_direct_transition = "Next",
+  transition = direct("Next")
+)
+```
+
+## Attributes
+
+`SetAttribute` gets its own vignette (`vignette("set-attribute-precedence")`) -- recapped here
+for completeness. `Counter` increments or decrements a numeric attribute by `amount` (default 1):
+
+```{r attributes}
+create_state_settings("SetAttribute",
+  attribute = "risk_score", value = 0,
+  transition = direct("Next")
+)
+create_state_settings("Counter",
+  attribute = "dose_count", action = "increment",
+  transition = direct("Next")
+)
+```
+
+## Encounters
+
+```{r encounters}
+create_state_settings("Encounter", wellness = TRUE, transition = direct("Next"))
+create_state_settings("EncounterEnd",
+  discharge_disposition = create_component_settings("code",
+    system = "SNOMED-CT", code = "306689006", display = "Discharge to home"
+  ),
+  transition = direct("Next")
+)
+```
+
+## Conditions
+
+`ConditionOnset` is recapped from `vignette("layers")`:
+
+```{r conditions}
+create_state_settings("ConditionOnset",
+  codes = list(strep_code), target_encounter = "Diagnosis Encounter",
+  transition = direct("Diagnosis Encounter")
+)
+create_state_settings("ConditionEnd",
+  condition_onset = "Condition Onset",
+  transition = direct("Next")
+)
+```
+
+## Allergies
+
+`allergy_type`/`category` are free strings (e.g. `"allergy"`/`"intolerance"`,
+`"food"`/`"medication"`/`"environment"`), not restricted by this package:
+
+```{r allergies}
+create_state_settings("AllergyOnset",
+  codes = list(penicillin_code),
+  allergy_type = "allergy", category = "medication",
+  transition = direct("Next")
+)
+create_state_settings("AllergyEnd",
+  allergy_onset = "Allergy Onset",
+  transition = direct("Next")
+)
+```
+
+## Medications
+
+`MedicationOrder`'s `reason` resolves against a person attribute, a prior state's onset name, or
+a `ConditionOnset` state -- see `vignette("layers")`'s note on this:
+
+```{r medications}
+create_state_settings("MedicationOrder",
+  codes = list(acetaminophen_code),
+  reason = "Condition Onset", transition = direct("Next")
+)
+create_state_settings("MedicationEnd",
+  medication_order = "Prescribe Medication",
+  transition = direct("Next")
+)
+```
+
+## Care plans
+
+`activities` and `goals` are both lists of `code` components, same as `codes`:
+
+```{r careplans}
+create_state_settings("CarePlanStart",
+  codes = list(diabetes_careplan_code),
+  activities = list(create_component_settings("code",
+    system = "SNOMED-CT", code = "160670007", display = "Diabetic diet"
+  )),
+  goals = list(create_component_settings("code",
+    system = "SNOMED-CT", code = "160688004", display = "Weight reduction"
+  )),
+  transition = direct("Next")
+)
+create_state_settings("CarePlanEnd", careplan = "Start Care Plan", transition = direct("Next"))
+```
+
+## Procedures, symptoms, vitals, death, vaccination
+
+`vignette("distribution")` covers `VitalSign` in depth; recapped here. `Symptom` tracks severity
+1-100 -- the highest value across all causes drives urgency logic elsewhere in Synthea:
+
+```{r clinical-events}
+create_state_settings("Procedure",
+  codes = list(strep_code),
+  duration = create_component_settings("exact", quantity = 30, unit = "minutes"),
+  transition = direct("Next")
+)
+create_state_settings("Symptom",
+  symptom = "Chest Pain",
+  range = create_component_settings("range", low = 10, high = 40),
+  transition = direct("Next")
+)
+create_state_settings("VitalSign",
+  vital_sign = "BMI", unit = "kg/m2",
+  exact = create_component_settings("exact", quantity = 24), transition = direct("Next")
+)
+```
+
+Omitting both `range` and `exact` on `Death` means immediate death; giving one delays it:
+
+```{r death}
+create_state_settings("Death", condition_onset = "Condition Onset", transition = direct("Next"))
+```
+
+`Vaccine`'s `series` is the dose number (an integer) -- not to be confused with `ImagingStudy`'s
+`series` list below, same field name on two unrelated state types:
+
+```{r vaccine}
+flu_vaccine_code <- create_component_settings("code",
+  system = "CVX", code = "141", display = "Influenza, seasonal, injectable"
+)
+create_state_settings("Vaccine",
+  series = 1, codes = list(flu_vaccine_code),
+  transition = direct("Next")
+)
+```
+
+## Observations and imaging
+
+A standalone `Observation` (used as its own state, so `transition` applies normally):
+
+```{r observation}
+temperature_code <- create_component_settings("code",
+  system = "LOINC", code = "8310-5", display = "Body temperature"
+)
+create_state_settings("Observation",
+  codes = list(temperature_code),
+  exact = create_component_settings("exact", quantity = 98.6, unit = "degF"), unit = "degF",
+  category = "vital-signs", transition = direct("Next")
+)
+```
+
+`MultiObservation` and `DiagnosticReport` both take a list of nested `Observation`-shaped
+settings via `observations` -- built the same way, just with `transition = NULL` (the one case
+where `Observation`'s transition is optional rather than required, per `vignette("layers")`):
+
+```{r multiobservation}
+systolic_code <- create_component_settings("code",
+  system = "LOINC", code = "8480-6", display = "Systolic blood pressure"
+)
+diastolic_code <- create_component_settings("code",
+  system = "LOINC", code = "8462-4", display = "Diastolic blood pressure"
+)
+
+bp_panel_code <- create_component_settings("code",
+  system = "LOINC", code = "35094-2", display = "Blood pressure panel"
+)
+
+create_state_settings("MultiObservation",
+  codes = list(bp_panel_code),
+  observations = list(
+    create_state_settings("Observation",
+      codes = list(systolic_code),
+      exact = create_component_settings("exact", quantity = 120), unit = "mmHg"
+    ),
+    create_state_settings("Observation",
+      codes = list(diastolic_code),
+      exact = create_component_settings("exact", quantity = 80), unit = "mmHg"
+    )
+  ),
+  transition = direct("Next")
+)
+```
+
+`DiagnosticReport` is the same shape as `MultiObservation`, just without the optional `category`
+field:
+
+```{r diagnosticreport}
+create_state_settings("DiagnosticReport",
+  codes = list(bp_panel_code),
+  observations = list(
+    create_state_settings("Observation",
+      codes = list(systolic_code),
+      exact = create_component_settings("exact", quantity = 120), unit = "mmHg"
+    )
+  ),
+  transition = direct("Next")
+)
+```
+
+`ImagingStudy`'s `series` items follow `HealthRecord.ImagingStudy.Series`'s shape
+(`modality`, `body_site`, `instances`) -- this package passes them through as raw lists, not
+independently validated:
+
+```{r imagingstudy}
+xray_procedure_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "399208008", display = "Plain chest X-ray"
+)
+
+create_state_settings("ImagingStudy",
+  procedure_code = xray_procedure_code,
+  series = list(list(
+    modality = create_component_settings("code",
+      system = "DICOM-DCM", code = "DX", display = "Digital Radiography"
+    ),
+    body_site = create_component_settings("code",
+      system = "SNOMED-CT", code = "51185008", display = "Thoracic structure"
+    ),
+    instances = list(list(
+      title = "Chest X-ray, PA view",
+      sop_class = create_component_settings("code",
+        system = "DICOM-SOP", code = "1.2.840.10008.5.1.4.1.1.1.1",
+        display = "Digital X-Ray Image Storage"
+      )
+    ))
+  )),
+  transition = direct("Next")
+)
+```
+
+## Devices and supplies
+
+`Device.code` is **singular** (one `Code`) -- `DeviceEnd.codes` is **plural** (a list), the
+asymmetry `vignette("layers")` calls out explicitly:
+
+```{r devices}
+pacemaker_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "14106009", display = "Cardiac pacemaker"
+)
+
+create_state_settings("Device",
+  code = pacemaker_code,
+  manufacturer = "Acme Medical", model = "X100", transition = direct("Next")
+)
+create_state_settings("DeviceEnd", device = "Implant Device", transition = direct("Next"))
+```
+
+Each `supplies` item is a raw `list(code = <a code component>, quantity = <n>)`, not
+independently validated:
+
+```{r supplylist}
+gauze_code <- create_component_settings("code",
+  system = "SNOMED-CT", code = "705076002", display = "Sterile gauze dressing"
+)
+
+create_state_settings("SupplyList",
+  supplies = list(list(code = gauze_code, quantity = 10)),
+  transition = direct("Next")
+)
+```
+
+## Where to go from here
+
+Most of the 31 examples above are standalone -- built and printed, not assembled into a full
+module, since wiring 31 states into one coherent graph would obscure rather than clarify each
+one's shape. `vignette("layers")` and `vignette("cohort-building")`
+show several of these state types wired together into real, validated modules.

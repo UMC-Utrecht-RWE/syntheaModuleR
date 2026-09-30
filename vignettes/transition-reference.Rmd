@@ -1,0 +1,110 @@
+---
+title: "Transition Reference: All Six Kinds"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Transition Reference: All Six Kinds}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+`vignette("layers")` introduces `create_transition_settings()` and shows three of its six kinds
+(`direct`, `conditional`, `distributed`). This vignette is the complete reference, including the
+three (`complex`, `lookup_table`, `type_of_care`) that don't otherwise appear in any vignette.
+
+```{r setup}
+library(syntheaModuleR)
+```
+
+## Quick reference
+
+| `kind`         | Required                                      | Notes |
+|----------------|------------------------------------------------|-------|
+| `direct`       | `to`                                            | always goes to the same state |
+| `distributed`  | `options` (`transition`, `distribution`)        | picks one option at random |
+| `conditional`  | `options` (`condition` [optional on the last], `transition`) | first match wins; last option with no `condition` is the else branch |
+| `complex`      | `options` (`condition` optional, plus exactly one of `transition`/`distributions`) | combines conditional and distributed routing |
+| `lookup_table` | `lookup_table_name`, `options` (`transition`, `default_probability`) | reads probabilities from an external CSV this package doesn't generate |
+| `type_of_care` | `ambulatory`, `telemedicine`, `emergency`       | routes by insurance/telemedicine-adoption date, config-driven |
+
+## `direct`, `conditional`, `distributed` (recap)
+
+```{r recap}
+create_transition_settings("direct", to = "Diagnosis Encounter")
+
+create_transition_settings("conditional", options = list(
+  list(
+    condition = create_logic_settings("Age", operator = ">=", quantity = 18, unit = "years"),
+    transition = "Adult Dosing"
+  ),
+  list(transition = "Pediatric Dosing")
+))
+
+create_transition_settings("distributed", options = list(
+  list(transition = "Resolves", distribution = 0.9),
+  list(transition = "Death", distribution = 0.1)
+))
+```
+
+## `complex`
+
+Each option is gated by an optional `condition` and is itself either a direct `transition` or a
+nested `distributions` list -- so a single transition can mix "route by condition" and "route by
+probability" in one place. Here, female patients always go to one pathway; everyone else splits
+50/50 between two others:
+
+```{r complex}
+create_transition_settings("complex", options = list(
+  list(
+    condition = create_logic_settings("Gender", gender = "F"),
+    transition = "Female Pathway"
+  ),
+  list(distributions = list(
+    list(transition = "Pathway A", distribution = 0.5),
+    list(transition = "Pathway B", distribution = 0.5)
+  ))
+))
+```
+
+Each option needs *exactly one* of `transition` or `distributions` -- giving both, or neither, is
+rejected the same way every other `one_of` constraint in this package is:
+
+```{r complex-error, error = TRUE}
+create_transition_settings("complex", options = list(
+  list(transition = "A", distributions = list(list(transition = "B", distribution = 1)))
+))
+```
+
+## `lookup_table`
+
+Reads transition probabilities from a CSV keyed by person attributes (plus special `age`/`time`
+range columns), under Synthea's `generate.lookup_tables` config directory. This package only
+wires the reference -- the CSV itself has to already exist in the target Synthea checkout:
+
+```{r lookup_table}
+create_transition_settings("lookup_table",
+  lookup_table_name = "risk_by_demographics.csv",
+  options = list(
+    list(transition = "High Risk Path", default_probability = 0.3),
+    list(transition = "Low Risk Path", default_probability = 0.7)
+  )
+)
+```
+
+## `type_of_care`
+
+Routes based on insurance and the simulated date relative to a configured telemedicine-adoption
+point (modeling the COVID-era telehealth shift). Entirely config-driven -- this package just
+wires the three state-name targets:
+
+```{r type_of_care}
+create_transition_settings("type_of_care",
+  ambulatory = "Ambulatory Visit", telemedicine = "Telemedicine Visit", emergency = "ER Visit"
+)
+```
