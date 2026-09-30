@@ -72,26 +72,6 @@ build_module_spec <- function(
 ) {
   exposure_state <- match.arg(exposure_state)
 
-  .required_cols <- function(df, cols, df_name) {
-    missing <- setdiff(cols, names(df))
-    if (length(missing) > 0) {
-      stop(sprintf(
-        "build_module_spec(): %s is missing column(s): %s", df_name, paste(missing, collapse = ", ")
-      ))
-    }
-  }
-  .fallback_col <- function(df, ...) {
-    for (nm in c(...)) {
-      if (nm %in% names(df)) {
-        return(df[[nm]])
-      }
-    }
-    stop(sprintf(
-      "build_module_spec(): expected one of these columns: %s. Found: %s.",
-      paste(c(...), collapse = ", "), paste(names(df), collapse = ", ")
-    ))
-  }
-
   .required_cols(exposure_codes, c("option", "code", "display"), "exposure_codes")
   if (!"comparator" %in% names(exposure_shares)) {
     stop("build_module_spec(): exposure_shares must include a \"comparator\" entry")
@@ -204,6 +184,60 @@ read_module_spec <- function(path) {
   }
 }
 
+#' Stop if a spec input table lacks any required column
+#'
+#' @param df A `data.frame` passed to `build_module_spec()`.
+#' @param cols Column names `df` must contain.
+#' @param df_name The argument's name, used in the error message.
+#' @return `NULL`, invisibly; called for its error side effect.
+#' @noRd
+.required_cols <- function(df, cols, df_name) {
+  missing <- setdiff(cols, names(df))
+  if (length(missing) > 0) {
+    stop(sprintf(
+      "build_module_spec(): %s is missing column(s): %s", df_name, paste(missing, collapse = ", ")
+    ))
+  }
+}
+
+#' Return the first of several alternative column names present in a table
+#'
+#' Tolerates both `system` (this package's own naming) and `coding_system` (BRIDGE's naming,
+#' as returned by `read_bridge_codelist()`) without the caller having to rename first.
+#'
+#' @param df A `data.frame`.
+#' @param ... Candidate column names, in preference order.
+#' @return The first matching column of `df`, as a vector.
+#' @noRd
+.fallback_col <- function(df, ...) {
+  for (nm in c(...)) {
+    if (nm %in% names(df)) {
+      return(df[[nm]])
+    }
+  }
+  stop(sprintf(
+    "build_module_spec(): expected one of these columns: %s. Found: %s.",
+    paste(c(...), collapse = ", "), paste(names(df), collapse = ", ")
+  ))
+}
+
+#' Build one exposure option's leaf fragment for a spec's `exposure$state_type`
+#'
+#' @param state_type One of `"vaccine"`, `"medication"`, `"condition"`.
+#' @param label The fragment's state label.
+#' @param code A `create_component_settings("code", ...)` result.
+#' @return A fragment: a `Vaccine`, a chronic `MedicationOrder`, or a wellness-diagnosed
+#'   condition.
+#' @noRd
+.exposure_leaf <- function(state_type, label, code) {
+  switch(state_type,
+    vaccine = create_vaccine(label, code),
+    medication = create_step("MedicationOrder", codes = list(code), chronic = TRUE, label = label),
+    condition = create_condition(label, code, diagnosis = "wellness"),
+    stop(sprintf("build_module_from_spec(): unknown exposure state_type '%s'", state_type))
+  )
+}
+
 #' Build a Synthea module from a spec
 #'
 #' Purely mechanical -- no codelist access, no parameter decisions, everything it needs is already
@@ -236,24 +270,13 @@ build_module_from_spec <- function(x, as_json = TRUE, validate = TRUE) {
     x
   }
 
-  exposure_leaf <- switch(spec$exposure$state_type,
-    vaccine = function(label, code) create_vaccine(label, code),
-    medication = function(label, code) {
-      create_step("MedicationOrder", codes = list(code), chronic = TRUE, label = label)
-    },
-    condition = function(label, code) create_condition(label, code, diagnosis = "wellness"),
-    stop(sprintf(
-      "build_module_from_spec(): unknown exposure state_type '%s'", spec$exposure$state_type
-    ))
-  )
-
   opt_names <- vapply(spec$exposure$options, function(opt) opt$option, character(1))
   exposure_options <- .named_list(
     lapply(spec$exposure$options, function(opt) {
       code <- create_component_settings(
         "code", system = opt$system, code = opt$code, display = opt$display
       )
-      exposure_leaf(paste0("Exposure - ", opt$option), code)
+      .exposure_leaf(spec$exposure$state_type, paste0("Exposure - ", opt$option), code)
     }),
     opt_names
   )

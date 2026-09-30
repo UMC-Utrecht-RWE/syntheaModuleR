@@ -121,39 +121,30 @@ read_bridge_codelist <- function(
 ) {
   df <- .read_bridge_source(x)
 
-  .resolve <- function(canonical, required) {
-    actual <- columns[[canonical]]
-    if (is.null(actual) || !actual %in% names(df)) {
-      if (required) {
-        stop(sprintf(
-          paste0(
-            "read_bridge_codelist(): '%s' could not be resolved (columns$%s = %s). ",
-            "Available columns: %s."
-          ),
-          canonical, canonical,
-          if (is.null(actual)) "NULL" else sprintf("\"%s\"", actual),
-          paste(names(df), collapse = ", ")
-        ))
-      }
-      return(NULL)
-    }
-    actual
-  }
-
   needs_event_abbrev_col <- !is.null(event_abbreviation) ||
     identical(group_by, "event_abbreviation")
 
-  code_col <- .resolve("code", required = TRUE)
-  display_col <- .resolve("display", required = TRUE)
-  type_col <- .resolve("type", required = !is.null(type))
-  coding_system_col <- .resolve("coding_system", required = !is.null(coding_system))
+  code_col <- .resolve_bridge_column("code", required = TRUE, columns, df)
+  display_col <- .resolve_bridge_column("display", required = TRUE, columns, df)
+  type_col <- .resolve_bridge_column("type", required = !is.null(type), columns, df)
+  coding_system_col <- .resolve_bridge_column(
+    "coding_system", required = !is.null(coding_system), columns, df
+  )
   event_abbrev_col <- if (needs_event_abbrev_col) {
-    .resolve("event_abbreviation", required = TRUE)
+    .resolve_bridge_column("event_abbreviation", required = TRUE, columns, df)
   } else {
     NULL
   }
-  group_col <- if (!is.null(group_by)) .resolve(group_by, required = TRUE) else NULL
-  tags_col <- if (!is.null(group_by)) .resolve("tags", required = TRUE) else NULL
+  group_col <- if (!is.null(group_by)) {
+    .resolve_bridge_column(group_by, required = TRUE, columns, df)
+  } else {
+    NULL
+  }
+  tags_col <- if (!is.null(group_by)) {
+    .resolve_bridge_column("tags", required = TRUE, columns, df)
+  } else {
+    NULL
+  }
 
   keep <- rep(TRUE, nrow(df))
   if (!is.null(type)) {
@@ -189,19 +180,7 @@ read_bridge_codelist <- function(
   }
   tags_raw <- out[[tags_col]]
 
-  .tag_rank <- function(tag_value) {
-    tl <- tolower(trimws(tag_value))
-    if (!nzchar(tl)) {
-      return(NA_integer_)
-    }
-    for (i in seq_along(tag_preference)) {
-      if (grepl(tag_preference[i], tl, fixed = TRUE)) {
-        return(i)
-      }
-    }
-    NA_integer_
-  }
-  ranks <- vapply(tags_raw, .tag_rank, integer(1))
+  ranks <- vapply(tags_raw, .tag_rank, integer(1), tag_preference = tag_preference)
 
   all_groups <- unique(result[[group_by]])
   eligible <- !is.na(ranks)
@@ -241,4 +220,54 @@ read_bridge_codelist <- function(
     return(utils::read.csv(x, colClasses = "character", stringsAsFactors = FALSE, check.names = FALSE))
   }
   stop("read_bridge_codelist(): `x` must be a file path (character) or a data.frame")
+}
+
+#' Map a canonical codelist field to the actual column name in a BRIDGE table
+#'
+#' @param canonical Canonical field name, e.g. `"code"` or `"event_abbreviation"` -- a name in
+#'   `columns`.
+#' @param required If TRUE, an unresolvable field is an error; if FALSE, it resolves to `NULL`
+#'   (the caller didn't ask to filter or group on it, so its absence is fine).
+#' @param columns Canonical-to-actual column-name mapping, as from `bridge_columns()`.
+#' @param df The codelist `data.frame` the columns are looked up in.
+#' @return The actual column name (a string), or `NULL` if unresolvable and not `required`.
+#' @noRd
+.resolve_bridge_column <- function(canonical, required, columns, df) {
+  actual <- columns[[canonical]]
+  if (is.null(actual) || !actual %in% names(df)) {
+    if (required) {
+      stop(sprintf(
+        paste0(
+          "read_bridge_codelist(): '%s' could not be resolved (columns$%s = %s). ",
+          "Available columns: %s."
+        ),
+        canonical, canonical,
+        if (is.null(actual)) "NULL" else sprintf("\"%s\"", actual),
+        paste(names(df), collapse = ", ")
+      ))
+    }
+    return(NULL)
+  }
+  actual
+}
+
+#' Rank a row's tags cell against `tag_preference`
+#'
+#' @param tag_value One raw `tags` cell.
+#' @param tag_preference Tag substrings in preference order; matching is case-insensitive and
+#'   by substring, so e.g. `"narrow"` matches `"Narrow, RSV"`.
+#' @return The index of the first `tag_preference` entry found in `tag_value`, or `NA_integer_`
+#'   if none match or the cell is blank (the row is then ineligible).
+#' @noRd
+.tag_rank <- function(tag_value, tag_preference) {
+  tl <- tolower(trimws(tag_value))
+  if (!nzchar(tl)) {
+    return(NA_integer_)
+  }
+  for (i in seq_along(tag_preference)) {
+    if (grepl(tag_preference[i], tl, fixed = TRUE)) {
+      return(i)
+    }
+  }
+  NA_integer_
 }
