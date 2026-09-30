@@ -51,7 +51,7 @@ column, preferring rows whose \code{tags} value matches the best-ranked entry in
 (case-insensitively, substring-matched so a compound tag like \code{"multiple:narrow+possible"}
 still counts as \code{"narrow"}) and dropping \code{exclude}/\code{ignore}/unmapped rows entirely -- this is
 the AESI-style extraction shape (many candidate codes per concept, pick the best one), the
-generalization of the tag-filtering fix applied by hand while building the RSV-OA-1038 module
+generalization of the tag-filtering fix applied by hand while building an earlier study module
 (an unfiltered pick had landed on an \code{exclude}-tagged row for \code{ANAPHYLAXIS}). Leave \code{group_by = NULL} (the default) for the exposure-style extraction shape instead -- a handful of
 already-distinct rows (e.g. specific vaccine products) that the caller filters directly
 afterward (\code{subset()}/\code{grepl()} on \code{display}), where tag-based ranking doesn't apply.
