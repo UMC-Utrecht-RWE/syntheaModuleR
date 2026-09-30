@@ -472,8 +472,7 @@ build_module_from_spec <- function(x, as_json = TRUE, validate = TRUE) {
           create_logic_settings(
             "Attribute",
             attribute = exposure_attribute,
-            operator = "is not nil",
-            value = TRUE
+            operator = "is not nil"
           ),
           label = "Wait For Exposure"
         ),

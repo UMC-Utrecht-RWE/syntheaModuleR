@@ -235,6 +235,7 @@ test_that("build_module_from_spec returns the exposure module plus one module pe
   expect_equal(guard$type, "Guard")
   expect_equal(guard$allow$attribute, "exposure_group")
   expect_equal(guard$allow$operator, "is not nil")
+  expect_null(guard$allow$value)
   expect_equal(guard$direct_transition, "OUT1 Delay")
   expect_equal(out1[["Outcome - OUT1"]]$type, "ConditionOnset")
 })

@@ -22,9 +22,11 @@
       required = TRUE
     ))
   ),
+  # `value` is required unless `operator` is "is nil"/"is not nil" (checked in
+  # create_logic_settings()), which only test whether the attribute is set.
   Attribute = list(
-    required = c("attribute", "operator", "value"),
-    optional = c()
+    required = c("attribute", "operator"),
+    optional = c("value")
   ),
   And = list(
     required = c("conditions"),
@@ -169,6 +171,18 @@ create_logic_settings <- function(
     year = year
   )
   fields <- fields[!vapply(fields, is.null, logical(1))]
+
+  if (
+    identical(condition_type, "Attribute") &&
+      !is.null(fields$operator) &&
+      !fields$operator %in% c("is nil", "is not nil") &&
+      is.null(fields$value)
+  ) {
+    stop(sprintf(
+      "logic 'Attribute': missing required field 'value' (only optional when operator is \"is nil\" or \"is not nil\", got \"%s\")",
+      fields$operator
+    ))
+  }
 
   .build_settings(
     .logic_schema,
