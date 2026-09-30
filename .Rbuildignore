@@ -2,3 +2,6 @@
 ^doc$
 ^Meta$
 experimentation/
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
