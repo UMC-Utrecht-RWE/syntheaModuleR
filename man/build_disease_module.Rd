@@ -57,8 +57,12 @@ create_state_settings() (see example_compose.R). Same public signature/behavior 
 still returns an R list (as_json = FALSE), not a JSON string.
 }
 \examples{
-hypertension_code <- create_component_settings("code", system = "SNOMED-CT",
-                                                code = "38341003", display = "Hypertension")
-build_disease_module("Hypertension", condition_code = hypertension_code,
-                      diagnosis = "wellness")
+hypertension_code <- create_component_settings("code",
+  system = "SNOMED-CT",
+  code = "38341003", display = "Hypertension"
+)
+build_disease_module("Hypertension",
+  condition_code = hypertension_code,
+  diagnosis = "wellness"
+)
 }

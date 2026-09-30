@@ -25,8 +25,12 @@ only stops once it's satisfied -- e.g. occurrence-counting eligibility ("N quali
 built with \code{create_counter()} + an \code{Attribute} \code{Logic} condition.
 }
 \examples{
-body <- chain(create_delay(90, 90, "days"),
-               create_counter("readings", action = "increment", label = "Count"))
-repeat_until(body, until = create_logic_settings("Attribute", attribute = "readings",
-                                                  operator = ">=", value = 2))
+body <- chain(
+  create_delay(90, 90, "days"),
+  create_counter("readings", action = "increment", label = "Count")
+)
+repeat_until(body, until = create_logic_settings("Attribute",
+  attribute = "readings",
+  operator = ">=", value = 2
+))
 }

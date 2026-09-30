@@ -44,7 +44,9 @@ get invented -- always under the literal name "Terminal", the convention pathway
 or last in the graph.
 }
 \examples{
-diabetes <- create_component_settings("code", system = "SNOMED-CT", code = "44054006",
-                                       display = "Diabetes mellitus type 2 (disorder)")
+diabetes <- create_component_settings("code",
+  system = "SNOMED-CT", code = "44054006",
+  display = "Diabetes mellitus type 2 (disorder)"
+)
 build_cohort_module("Diabetes Cohort", create_condition("Diabetes", diabetes))
 }

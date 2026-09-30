@@ -38,7 +38,9 @@ The onset state is named exactly \code{label} (not "\code{label} Onset") specifi
 \code{create_medication()} can pass that same string straight through as \code{reason}.
 }
 \examples{
-diabetes <- create_component_settings("code", system = "SNOMED-CT", code = "44054006",
-                                       display = "Diabetes mellitus type 2 (disorder)")
+diabetes <- create_component_settings("code",
+  system = "SNOMED-CT", code = "44054006",
+  display = "Diabetes mellitus type 2 (disorder)"
+)
 create_condition("Diabetes", diabetes, diagnosis = "wellness")
 }

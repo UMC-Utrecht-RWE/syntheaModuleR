@@ -29,7 +29,9 @@ A fragment.
 Same shape as \code{create_allergy()}/\code{create_condition()}.
 }
 \examples{
-diabetes_care <- create_component_settings("code", system = "SNOMED-CT", code = "698360004",
-                                            display = "Diabetes self-management plan")
+diabetes_care <- create_component_settings("code",
+  system = "SNOMED-CT", code = "698360004",
+  display = "Diabetes self-management plan"
+)
 create_careplan("Diabetes Care Plan", diabetes_care)
 }

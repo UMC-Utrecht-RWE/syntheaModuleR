@@ -20,7 +20,9 @@ Same function as \code{chain()}'s two-argument case; exists purely for reading d
 \code{cohort <- cohort |> add(create_medication(...))} reads as "extend the thing I already have."
 }
 \examples{
-create_condition("Diabetes", create_component_settings("code", system = "SNOMED-CT",
-  code = "44054006", display = "Diabetes")) |>
+create_condition("Diabetes", create_component_settings("code",
+  system = "SNOMED-CT",
+  code = "44054006", display = "Diabetes"
+)) |>
   add(create_tag("Diagnosed", attribute = "seen", value = TRUE))
 }

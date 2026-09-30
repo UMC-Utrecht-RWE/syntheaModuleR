@@ -81,8 +81,10 @@ key (mean, standardDeviation, min, max, mode, value; low/high are shared with Ra
 named argument here (all default NULL).
 }
 \examples{
-create_component_settings("code", system = "SNOMED-CT", code = "38341003",
-                           display = "Hypertension")
+create_component_settings("code",
+  system = "SNOMED-CT", code = "38341003",
+  display = "Hypertension"
+)
 
 create_component_settings("distribution", kind = "UNIFORM", low = 1, high = 5)
 }

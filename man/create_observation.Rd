@@ -27,7 +27,9 @@ A fragment.
 The state type most real cohort definitions key on ("HbA1c > 8"), not just a diagnosis code.
 }
 \examples{
-hba1c <- create_component_settings("code", system = "LOINC", code = "4548-4",
-                                    display = "Hemoglobin A1c")
+hba1c <- create_component_settings("code",
+  system = "LOINC", code = "4548-4",
+  display = "Hemoglobin A1c"
+)
 create_observation("HbA1c Reading", hba1c, value = 8.5, unit = "\%")
 }

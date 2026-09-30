@@ -99,10 +99,14 @@ device model number for \code{type = "Device"}; \code{series} is a list of Serie
 }
 \examples{
 create_state_settings("Initial",
-  transition = create_transition_settings("direct", to = "Terminal"))
+  transition = create_transition_settings("direct", to = "Terminal")
+)
 
 create_state_settings("ConditionOnset",
-  codes = list(create_component_settings("code", system = "SNOMED-CT",
-                                          code = "38341003", display = "Hypertension")),
-  transition = create_transition_settings("direct", to = "Terminal"))
+  codes = list(create_component_settings("code",
+    system = "SNOMED-CT",
+    code = "38341003", display = "Hypertension"
+  )),
+  transition = create_transition_settings("direct", to = "Terminal")
+)
 }

@@ -33,7 +33,10 @@ A fragment.
 plus an automatic \code{Delay(course) -> MedicationEnd}.
 }
 \examples{
-metformin <- create_component_settings("code", system = "RxNorm", code = "860975",
-                                        display = "Metformin hydrochloride 500 MG Oral Tablet")
-create_medication("Metformin", metformin, condition = "Diabetes", duration = "long")
+metformin <- create_component_settings("code",
+  system = "RxNorm", code = "860975",
+  display = "Metformin hydrochloride 500 MG Oral Tablet"
+)
+create_medication("Metformin",
+metformin, condition = "Diabetes", duration = "long")
 }

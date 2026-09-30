@@ -25,7 +25,9 @@ purpose, for the state types with no dedicated leaf (\code{Symptom}, \code{Devic
 \code{SupplyList}, \code{CallSubmodule}, \code{Physiology}, ...).
 }
 \examples{
-create_step("Symptom", symptom = "Chest Pain", cause = "Heart Disease",
-            range = create_component_settings("range", low = 10, high = 30),
-            label = "Chest Pain Symptom")
+create_step("Symptom",
+  symptom = "Chest Pain", cause = "Heart Disease",
+  range = create_component_settings("range", low = 10, high = 30),
+  label = "Chest Pain Symptom"
+)
 }

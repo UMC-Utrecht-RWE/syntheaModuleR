@@ -21,7 +21,9 @@ A multi-dose series is \code{chain()}ing several of these with \code{create_dela
 separate "series" construct needed.
 }
 \examples{
-bnt162b2 <- create_component_settings("code", system = "CVX", code = "208",
-                                       display = "COVID-19 vaccine, mRNA")
+bnt162b2 <- create_component_settings("code",
+  system = "CVX", code = "208",
+  display = "COVID-19 vaccine, mRNA"
+)
 create_vaccine("First Dose", bnt162b2, series = 1)
 }

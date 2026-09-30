@@ -43,7 +43,8 @@ careplan, allergy_onset, device) resolves to a state that exists
 \examples{
 states <- list(
   Initial = create_state_settings("Initial",
-    transition = create_transition_settings("direct", to = "Terminal")),
+    transition = create_transition_settings("direct", to = "Terminal")
+  ),
   Terminal = create_state_settings("Terminal")
 )
 module <- build_module("Minimal Example", states, as_json = FALSE)

@@ -29,7 +29,9 @@ A fragment.
 Same onset(+resolution) shape as \code{create_condition()}.
 }
 \examples{
-penicillin <- create_component_settings("code", system = "RxNorm", code = "7980",
-                                         display = "Penicillin")
+penicillin <- create_component_settings("code",
+  system = "RxNorm", code = "7980",
+  display = "Penicillin"
+)
 create_allergy("Penicillin Allergy", penicillin)
 }

@@ -25,7 +25,9 @@ A fragment.
 Core to claims-style pipeline testing.
 }
 \examples{
-appendectomy <- create_component_settings("code", system = "SNOMED-CT", code = "80146002",
-                                           display = "Appendectomy")
+appendectomy <- create_component_settings("code",
+system = "SNOMED-CT", code = "80146002",
+  display = "Appendectomy"
+)
 create_procedure("Appendectomy", appendectomy)
 }
