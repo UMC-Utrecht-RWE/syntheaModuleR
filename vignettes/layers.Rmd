@@ -264,5 +264,5 @@ this vignette just introduced the pieces state-first, in the order you'll actual
 rather than bottom-up.
 
 For a full worked example that puts many of these state types together end to end, see
-`example_compose.R` (the generic `build_module()` workflow) and
-`example_trial_emulation.R` (a 47-state target-trial-emulation design).
+`vignette("cohort-building")` (the generic `build_module()` workflow, grown incrementally) and
+`vignette("frontend-layer")` (the same kind of module composed from fragments).

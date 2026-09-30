@@ -5,7 +5,7 @@
 \title{Convenience recipe: onset -> diagnosis encounter -> optional resolution/death -> Terminal.
 Kept for backward compatibility with earlier versions of this toolkit, and as a worked
 example of composing the layers -- the primary interface is build_module() +
-create_state_settings() (see example_compose.R). Same public signature/behavior as before;
+create_state_settings() (see vignette("recipe-vs-compose")). Same public signature/behavior as before;
 still returns an R list (as_json = FALSE), not a JSON string.}
 \usage{
 build_disease_module(
@@ -53,7 +53,7 @@ An R list mirroring the module JSON tree.
 Convenience recipe: onset -> diagnosis encounter -> optional resolution/death -> Terminal.
 Kept for backward compatibility with earlier versions of this toolkit, and as a worked
 example of composing the layers -- the primary interface is build_module() +
-create_state_settings() (see example_compose.R). Same public signature/behavior as before;
+create_state_settings() (see vignette("recipe-vs-compose")). Same public signature/behavior as before;
 still returns an R list (as_json = FALSE), not a JSON string.
 }
 \examples{
