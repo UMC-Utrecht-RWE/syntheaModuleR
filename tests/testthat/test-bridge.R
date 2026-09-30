@@ -173,8 +173,8 @@ test_that("read_bridge_codelist with group_by = NULL returns every filtered row 
     product_identifier = "PRODCODEID",
     code = c("A1", "A2", "A3", "B1"),
     product_name = c(
-      "Abrysvo product",
-      "Arexvy product",
+      "Vaccine A product",
+      "Vaccine B product",
       "Unspecified RSV product",
       "Not RSV"
     ),
@@ -191,7 +191,7 @@ test_that("read_bridge_codelist with group_by = NULL returns every filtered row 
   )
   expect_equal(nrow(result), 3)
   expect_true(all(grepl(
-    "RSV|Abrysvo|Arexvy",
+    "RSV|Vaccine A|Vaccine B",
     result$display,
     ignore.case = TRUE
   )))
