@@ -1,0 +1,142 @@
+---
+title: "From a RWE-BRIDGE codelist to a Synthea module"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{From a RWE-BRIDGE codelist to a Synthea module}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette assumes you've read `vignette("layers")` and `vignette("cohort-building")`. Those
+cover authoring a module's *content* directly in R. This one covers a different starting point:
+you already have a **RWE-BRIDGE-style reference codelist** -- a CSV mapping concepts to real
+codes, of the `event_definition / coding_system / code / concept_name / tags / type /
+event_abbreviation` shape used across several UMC-Utrecht-RWE study repositories -- and want a
+Synthea module that emits raw exposure/outcome records using those real codes.
+
+## The four stages
+
+```{r setup}
+library(syntheaModuleR)
+```
+
+1. **Specify where the necessary information is** -- `read_bridge_codelist()` reads a codelist
+   file (or an already-loaded `data.frame`) and returns a clean, canonically-named code table.
+2. **Add inclusion criteria / exposure / outcome parameters** -- `build_module_spec()` combines
+   those resolved codes with the parameters a codelist alone can never supply (arm shares, onset
+   probability/timing, optional demographic eligibility).
+3. **Produce a YAML that is editable** -- `write_module_spec()` persists the result; every code,
+   share, and probability is right there in plain text, ready to hand-edit.
+4. **Go from YAML to build a module** -- `build_module_from_spec()` reads it back and mechanically
+   assembles the Synthea module. This step never touches a codelist again.
+
+## Stage 1: read the codelist
+
+A toy codelist, standing in for a real RWE-BRIDGE file (the concept `GRIPPE` deliberately has one
+`exclude`-tagged and one `narrow`-tagged row, to show the tag-preference filtering):
+
+```{r toy-codelist}
+codelist <- data.frame(
+  event_abbreviation = c("GRIPPE", "GRIPPE", "COUGH"),
+  coding_system = "SNOMED-CT",
+  code = c("1", "2", "3"),
+  code_name = c("An unrelated excluded concept", "Influenza (disorder)", "Cough (finding)"),
+  tags = c("exclude", "narrow", "narrow"),
+  type = "AESI",
+  stringsAsFactors = FALSE
+)
+
+outcome_codes <- read_bridge_codelist(
+  codelist,
+  type = "AESI", coding_system = "SNOMED-CT",
+  group_by = "event_abbreviation"
+)
+outcome_codes
+```
+
+The `exclude`-tagged row for `GRIPPE` was never a candidate -- `read_bridge_codelist()` picked the
+`narrow` one. A real RWE-BRIDGE codelist often has dozens of candidate rows per concept; this is
+what makes picking the right one by hand tedious enough to be worth automating (and, done
+carelessly, easy to get wrong -- an earlier, unfiltered extraction genuinely picked an
+`exclude`-tagged row for a real AESI).
+
+An exposure-style extraction looks different: a handful of already-distinct rows (e.g. specific
+vaccine products), filtered by `event_abbreviation` alone, with no tag ranking needed
+(`group_by = NULL`, the default):
+
+```{r toy-exposure}
+drug_codelist <- data.frame(
+  event_abbreviation = c("FLU_VACC", "FLU_VACC"),
+  product_identifier = "PRODCODEID",
+  code = c("101", "102"),
+  product_name = c("Brand A flu vaccine", "Brand B flu vaccine"),
+  stringsAsFactors = FALSE
+)
+
+flu_rows <- read_bridge_codelist(
+  drug_codelist,
+  event_abbreviation = "FLU_VACC", coding_system = "PRODCODEID",
+  columns = bridge_columns(coding_system = "product_identifier", display = "product_name")
+)
+flu_rows
+```
+
+```{r toy-exposure-codes}
+exposure_codes <- data.frame(
+  option = c("brand_a", "brand_b"),
+  system = "PRODCODEID",
+  code = flu_rows$code,
+  display = flu_rows$display,
+  stringsAsFactors = FALSE
+)
+```
+
+## Stage 2: add the parameters a codelist can't supply
+
+```{r spec}
+spec <- build_module_spec(
+  "flu_vaccine_example",
+  exposure_codes = exposure_codes,
+  exposure_shares = c(brand_a = 0.3, brand_b = 0.2, comparator = 0.5),
+  outcome_codes = outcome_codes,
+  outcome_probability = 0.05,
+  outcome_delay = list(low = 0, high = 365, unit = "days"),
+  inclusion_criteria = list(age = list(operator = ">=", quantity = 18, unit = "years"))
+)
+```
+
+Note what's *not* here: no eligibility window, no composite subgroup logic, no incidence rate
+sourced from any pipeline-computed file. `inclusion_criteria` is the one optional exception --
+plain demographic skew, off by default, and never derived automatically.
+
+## Stage 3: write (and read back) the YAML
+
+```{r yaml, comment = ""}
+path <- tempfile(fileext = ".yaml")
+write_module_spec(spec, path)
+cat(readLines(path), sep = "\n")
+```
+
+This file is the thing you'd commit and hand-edit -- fix a code, add or remove an outcome item,
+adjust a share, all without touching R again.
+
+## Stage 4: build the module
+
+```{r build}
+module_json <- build_module_from_spec(path)
+parsed <- jsonlite::fromJSON(module_json, simplifyVector = FALSE)
+length(parsed$states)
+parsed$states$Initial$direct_transition
+```
+
+`inclusion_criteria` was given, so `Initial` routes into a `create_population()` Guard first; omit
+it entirely (`inclusion_criteria = NULL`, the default) and `Initial` would route straight into the
+exposure block instead -- `chain()` drops a `NULL` fragment on its own, no special-casing needed.
+
