@@ -96,6 +96,22 @@ test_that("pathways requires every option to have a matching share", {
   )
 })
 
+test_that("pathways requires shares to be valid probabilities summing to 1", {
+  opts <- list(a = NULL, b = NULL)
+  expect_error(
+    pathways("X", options = opts, shares = c(a = 0.8, b = 0.8)),
+    "must sum to 1"
+  )
+  expect_error(
+    pathways("X", options = opts, shares = c(a = 1.5, b = -0.5)),
+    "between 0 and 1"
+  )
+  expect_error(
+    pathways("X", options = opts, shares = c(a = NA, b = 1)),
+    "between 0 and 1"
+  )
+})
+
 test_that("pathways requires options to be a named list", {
   expect_error(
     pathways("X", options = list(NULL, NULL), shares = c(1, 1)),

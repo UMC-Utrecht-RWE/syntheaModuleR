@@ -137,7 +137,7 @@ add <- function(fragment, nxt) {
 #' @param name Used to derive the choice/join/tag state names.
 #' @param options A named list of fragments; an option can be `NULL` for "nothing happens on this
 #'   pathway."
-#' @param shares A named numeric vector matching `options`' names.
+#' @param shares A named numeric vector matching `options`' names -- each in [0, 1], summing to 1.
 #' @param attribute Optional -- auto-tags the chosen option's name (as this `attribute`) before
 #'   the join.
 #' @param terminal_options Optional character vector naming options (e.g. a `create_death()`
@@ -173,6 +173,20 @@ pathways <- function(
     stop(
       "pathways(): every name in `options` must have a matching entry in `shares`"
     )
+  }
+  opt_shares <- shares[opt_names]
+  if (
+    !is.numeric(opt_shares) ||
+      any(!is.finite(opt_shares)) ||
+      any(opt_shares < 0 | opt_shares > 1)
+  ) {
+    stop("pathways(): every share must be a finite number between 0 and 1")
+  }
+  if (abs(sum(opt_shares) - 1) > 1e-6) {
+    stop(sprintf(
+      "pathways(): shares must sum to 1 (got %s) -- Synthea would silently give the difference to the last option",
+      format(sum(opt_shares))
+    ))
   }
   if (!is.null(terminal_options) && !all(terminal_options %in% opt_names)) {
     stop(sprintf(

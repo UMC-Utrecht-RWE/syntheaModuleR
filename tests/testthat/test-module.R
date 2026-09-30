@@ -154,6 +154,24 @@ test_that("validate_module catches undefined state-name references across every 
   expect_error(validate_module(list(states = s)), "Nowhere")
 
   s <- base()
+  s$Initial$lookup_table_transition <- list(list(
+    transition = "Nowhere",
+    lookup_table_name = "risk.csv",
+    default_probability = 1
+  ))
+  s$Initial$direct_transition <- NULL
+  expect_error(validate_module(list(states = s)), "Nowhere")
+
+  s <- base()
+  s$Initial$type_of_care_transition <- list(
+    ambulatory = "Terminal",
+    telemedicine = "Nowhere",
+    emergency = "Terminal"
+  )
+  s$Initial$direct_transition <- NULL
+  expect_error(validate_module(list(states = s)), "Nowhere")
+
+  s <- base()
   s$Initial$target_encounter <- "Nowhere"
   expect_error(validate_module(list(states = s)), "Nowhere")
 
