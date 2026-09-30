@@ -15,10 +15,5 @@ write_module_spec(spec, path)
 \code{path}, invisibly.
 }
 \description{
-Like \code{jsonlite::toJSON()} (see \code{write_module_json()}'s internal \code{.to_json_ascii_safe()}),
-\code{yaml::write_yaml()}'s Unicode handling is locale-dependent and silently corrupts non-ASCII
-text under a non-UTF-8 locale. \code{write_module_spec()}/\code{read_module_spec()} route every
-character field through the same ASCII-safe placeholder scheme used for JSON output, so a
-spec's non-ASCII display text (e.g. an accented clinical term) survives the YAML round-trip
-correctly regardless of the process locale.
+Write a module spec to a YAML file
 }

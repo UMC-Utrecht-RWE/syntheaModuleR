@@ -14,8 +14,5 @@ The spec, as a nested list.
 }
 \description{
 Checks the required top-level keys are present, erroring clearly (naming which ones are
-missing) rather than failing deep inside \code{build_module_from_spec()}. Restores any ASCII-safe
-placeholder \code{write_module_spec()} wrote for non-ASCII text back to the real character; a
-hand-edited YAML file that never went through \code{write_module_spec()} (and so has no
-placeholders to restore) round-trips unchanged.
+missing) rather than failing deep inside \code{build_module_from_spec()}.
 }
