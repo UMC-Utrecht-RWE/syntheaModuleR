@@ -189,6 +189,23 @@ validate_module <- function(module_list) {
         }
       }
     }
+    if (!is.null(st$lookup_table_transition)) {
+      referenced <- c(
+        referenced,
+        vapply(
+          st$lookup_table_transition,
+          function(o) o$transition,
+          character(1)
+        )
+      )
+    }
+    if (!is.null(st$type_of_care_transition)) {
+      toc <- st$type_of_care_transition
+      referenced <- c(
+        referenced,
+        unlist(toc[c("ambulatory", "telemedicine", "emergency")], use.names = FALSE)
+      )
+    }
     if (!is.null(st$target_encounter) && nzchar(st$target_encounter)) {
       referenced <- c(referenced, st$target_encounter)
     }

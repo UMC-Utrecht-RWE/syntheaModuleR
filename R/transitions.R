@@ -87,22 +87,22 @@ create_transition_settings <- function(
   }
   .validate_settings(entry, fields, sprintf("transition '%s'", kind))
   fields <- .apply_array_rule(entry, fields)
+  if (!is.null(fields$options) && length(fields$options) == 0) {
+    stop(sprintf("transition '%s': 'options' must not be empty", kind))
+  }
+  if (kind %in% c("conditional", "complex")) {
+    .check_fallback_last(fields$options, kind)
+  }
 
   switch(
     kind,
     direct = list(direct_transition = fields$to),
-    distributed = {
-      opts <- lapply(fields$options, function(o) {
-        if (is.null(o$transition)) {
-          stop("transition 'distributed': each option needs 'transition'")
-        }
-        if (is.null(o$distribution)) {
-          stop("transition 'distributed': each option needs 'distribution'")
-        }
-        list(transition = o$transition, distribution = o$distribution)
-      })
-      list(distributed_transition = unname(opts))
-    },
+    distributed = list(
+      distributed_transition = .distributed_options(
+        fields$options,
+        "transition 'distributed'"
+      )
+    ),
     conditional = {
       opts <- lapply(fields$options, function(o) {
         if (is.null(o$transition)) {
@@ -132,7 +132,13 @@ create_transition_settings <- function(
         if (has_t) {
           item$transition <- o$transition
         } else {
-          item$distributions <- unname(o$distributions)
+          item$distributions <- .distributed_options(
+            .apply_array_rule(
+              list(array = "distributions"),
+              list(distributions = o$distributions)
+            )$distributions,
+            "transition 'complex' distributions"
+          )
         }
         item
       })
@@ -161,4 +167,37 @@ create_transition_settings <- function(
       )
     )
   )
+}
+
+# Shared by `distributed` and `complex`'s nested `distributions`: every option needs both
+# `transition` and `distribution`, and the list must be non-empty.
+.distributed_options <- function(options, where) {
+  if (length(options) == 0) {
+    stop(sprintf("%s: options must not be empty", where))
+  }
+  opts <- lapply(options, function(o) {
+    if (!is.list(o) || is.null(o$transition)) {
+      stop(sprintf("%s: each option needs 'transition'", where))
+    }
+    if (is.null(o$distribution)) {
+      stop(sprintf("%s: each option needs 'distribution'", where))
+    }
+    list(transition = o$transition, distribution = o$distribution)
+  })
+  unname(opts)
+}
+
+# A conditionless option always matches, so any option after it could never be reached.
+.check_fallback_last <- function(options, kind) {
+  no_cond <- which(vapply(options, function(o) is.null(o$condition), logical(1)))
+  if (any(no_cond < length(options))) {
+    stop(sprintf(
+      paste0(
+        "transition '%s': only the last option may omit 'condition' (option %d has no ",
+        "condition, so the options after it could never be reached)"
+      ),
+      kind,
+      no_cond[no_cond < length(options)][1]
+    ))
+  }
 }
