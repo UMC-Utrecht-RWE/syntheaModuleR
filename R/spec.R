@@ -10,6 +10,11 @@
 
 #' Assemble an exposure+outcome module spec from resolved codes and study parameters
 #'
+#' **Superseded** by the events pipeline (`read_bridge_concepts()` -> `build_event_spec()` ->
+#' `write_event_spec()` -> `build_modules_from_events()`), which also places covariate records
+#' before exposure, uses every code of a concept, and controls how many events each patient gets.
+#' Kept unchanged for existing exposure+outcome specs.
+#'
 #' Combines already-resolved exposure/outcome code tables (typically `read_bridge_codelist()`'s
 #' output, though any `data.frame` with the right columns works) with the human-decided
 #' parameters a codelist alone can never supply -- arm shares, onset probability/timing, optional
@@ -31,7 +36,7 @@
 #'   placement window. A specific item's delay can still be hand-overridden after writing the
 #'   YAML -- see the `outcomes.items[[i]].delay` shape `build_module_from_spec()` reads.
 #' @param inclusion_criteria Optional `list(age = list(operator, quantity, unit), gender = ...,
-#'   race = ..., socioeconomic = ...)`, passed straight through to `create_population()`'s
+#'   race = ..., socioeconomic = ..., date = ...)`, passed straight through to `create_population()`'s
 #'   matching arguments. `NULL` (default): no Guard at all -- omitted from the module entirely,
 #'   not merely a no-op filter.
 #' @param exposure_state Which Frontend leaf builds each exposure row: `"vaccine"`
@@ -71,55 +76,13 @@ build_module_spec <- function(
   provenance = NULL
 ) {
   exposure_state <- match.arg(exposure_state)
-
-  .required_cols(
+  exposure <- .exposure_spec(
     exposure_codes,
-    c("option", "code", "display"),
-    "exposure_codes"
+    exposure_shares,
+    exposure_state,
+    exposure_attribute,
+    "build_module_spec()"
   )
-  if (!"comparator" %in% names(exposure_shares)) {
-    stop(
-      "build_module_spec(): exposure_shares must include a \"comparator\" entry"
-    )
-  }
-  missing_shares <- setdiff(exposure_codes$option, names(exposure_shares))
-  if (length(missing_shares) > 0) {
-    stop(sprintf(
-      "build_module_spec(): exposure_shares is missing entries for: %s",
-      paste(missing_shares, collapse = ", ")
-    ))
-  }
-  exposure_system <- .fallback_col(exposure_codes, "system", "coding_system")
-
-  exposure_options <- lapply(seq_len(nrow(exposure_codes)), function(i) {
-    list(
-      option = exposure_codes$option[i],
-      system = exposure_system[i],
-      code = exposure_codes$code[i],
-      display = exposure_codes$display[i],
-      share = unname(exposure_shares[[exposure_codes$option[i]]])
-    )
-  })
-
-  .check_shares(
-    c(
-      vapply(exposure_options, function(o) o$share, numeric(1)),
-      exposure_shares[["comparator"]]
-    ),
-    "build_module_spec(): exposure_shares"
-  )
-  total_share <- sum(vapply(
-    exposure_options,
-    function(o) o$share,
-    numeric(1)
-  )) +
-    exposure_shares[["comparator"]]
-  if (!isTRUE(all.equal(unname(total_share), 1))) {
-    stop(sprintf(
-      "build_module_spec(): exposure_shares must sum to 1, got %s",
-      total_share
-    ))
-  }
 
   label_col <- if ("event_abbreviation" %in% names(outcome_codes)) {
     "event_abbreviation"
@@ -159,15 +122,7 @@ build_module_spec <- function(
   list(
     name = name,
     inclusion_criteria = inclusion_criteria,
-    exposure = list(
-      attribute = exposure_attribute,
-      state_type = exposure_state,
-      options = exposure_options,
-      comparator = list(
-        include = TRUE,
-        share = unname(exposure_shares[["comparator"]])
-      )
-    ),
+    exposure = exposure,
     outcomes = list(
       default_probability = if (is.numeric(outcome_probability)) {
         outcome_probability[1]
@@ -188,9 +143,19 @@ build_module_spec <- function(
 #' @return `path`, invisibly.
 #' @export
 write_module_spec <- function(spec, path) {
-  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
-  yaml::write_yaml(spec, path)
+  .write_yaml_utf8(spec, path)
   invisible(path)
+}
+
+#' Write an R list as UTF-8 YAML, regardless of the session locale
+#'
+#' `yaml::write_yaml()` re-encodes through the session's native encoding, which under a C locale
+#' turns e.g. "é" into the literal text "<U+00E9>"; writing `yaml::as.yaml()`'s UTF-8 string as
+#' raw bytes avoids that.
+#' @noRd
+.write_yaml_utf8 <- function(x, path) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  writeLines(enc2utf8(yaml::as.yaml(x)), con = path, sep = "", useBytes = TRUE)
 }
 
 #' Read a module spec from a YAML file
@@ -203,6 +168,12 @@ write_module_spec <- function(spec, path) {
 #' @export
 read_module_spec <- function(path) {
   spec <- yaml::read_yaml(path)
+  if (identical(as.integer(spec$spec_version), 2L)) {
+    stop(sprintf(
+      "%s is a spec_version 2 (events) spec -- read it with read_event_spec() instead",
+      path
+    ))
+  }
   .check_required_spec_keys(spec, path)
   spec
 }
@@ -285,6 +256,108 @@ read_module_spec <- function(path) {
   }
 }
 
+#' Assemble and check a spec's `exposure` block from an exposure code table
+#'
+#' Shared by `build_module_spec()` (v1) and `build_event_spec()` (v2).
+#'
+#' @param exposure_codes A `data.frame` with `option`, `code`, `display`, and `system` (or
+#'   `coding_system`).
+#' @param exposure_shares Named shares covering every option plus `"comparator"`, summing to 1.
+#' @param state_type `"vaccine"`, `"medication"` or `"condition"`.
+#' @param attribute The person attribute the chosen arm is tagged as.
+#' @param where Caller name, used in error messages.
+#' @return The `exposure` list: `attribute`, `state_type`, `options`, `comparator`.
+#' @noRd
+.exposure_spec <- function(exposure_codes, exposure_shares, state_type, attribute, where) {
+  .required_cols(exposure_codes, c("option", "code", "display"), "exposure_codes")
+  if (!"comparator" %in% names(exposure_shares)) {
+    stop(sprintf("%s: exposure_shares must include a \"comparator\" entry", where))
+  }
+  missing_shares <- setdiff(exposure_codes$option, names(exposure_shares))
+  if (length(missing_shares) > 0) {
+    stop(sprintf(
+      "%s: exposure_shares is missing entries for: %s",
+      where,
+      paste(missing_shares, collapse = ", ")
+    ))
+  }
+  exposure_system <- .fallback_col(exposure_codes, "system", "coding_system")
+
+  options <- lapply(seq_len(nrow(exposure_codes)), function(i) {
+    list(
+      option = exposure_codes$option[i],
+      system = exposure_system[i],
+      code = exposure_codes$code[i],
+      display = exposure_codes$display[i],
+      share = unname(exposure_shares[[exposure_codes$option[i]]])
+    )
+  })
+
+  shares <- c(
+    vapply(options, function(o) o$share, numeric(1)),
+    exposure_shares[["comparator"]]
+  )
+  .check_shares(shares, sprintf("%s: exposure_shares", where))
+  if (!isTRUE(all.equal(unname(sum(shares)), 1))) {
+    stop(sprintf("%s: exposure_shares must sum to 1, got %s", where, sum(shares)))
+  }
+
+  list(
+    attribute = .check_exposure_attribute(attribute, where),
+    state_type = state_type,
+    options = options,
+    comparator = list(include = TRUE, share = unname(exposure_shares[["comparator"]]))
+  )
+}
+
+#' Stop unless a spec's exposure attribute is a single non-empty string
+#' @noRd
+.check_exposure_attribute <- function(attribute, where) {
+  if (!is.character(attribute) || length(attribute) != 1 || !nzchar(attribute)) {
+    stop(sprintf(
+      "%s: exposure$attribute must be set -- the outcome/event modules wait on it",
+      where
+    ))
+  }
+  attribute
+}
+
+#' Build the exposure arm `pathways()` fragment from a spec's `exposure` block
+#'
+#' One leaf per `exposure$options` entry (by `exposure$state_type`), plus the comparator arm when
+#' `exposure$comparator$include` is true; the chosen arm is tagged as `exposure$attribute`.
+#' @noRd
+.exposure_fragment <- function(exposure, where) {
+  opt_names <- vapply(exposure$options, function(opt) opt$option, character(1))
+  options <- .named_list(
+    lapply(exposure$options, function(opt) {
+      code <- create_component_settings(
+        "code",
+        system = opt$system,
+        code = opt$code,
+        display = opt$display
+      )
+      .exposure_leaf(exposure$state_type, paste0("Exposure - ", opt$option), code)
+    }),
+    opt_names
+  )
+  shares <- vapply(exposure$options, function(opt) opt$share, numeric(1))
+  names(shares) <- opt_names
+
+  if (isTRUE(exposure$comparator$include)) {
+    options <- c(options, list(comparator = NULL))
+    shares <- c(shares, c(comparator = exposure$comparator$share))
+  }
+  .check_shares(shares, sprintf("%s: exposure shares", where))
+
+  pathways(
+    "Exposure",
+    options = options,
+    shares = shares,
+    attribute = .check_exposure_attribute(exposure$attribute, where)
+  )
+}
+
 #' Build one exposure option's leaf fragment for a spec's `exposure$state_type`
 #'
 #' @param state_type One of `"vaccine"`, `"medication"`, `"condition"`.
@@ -312,6 +385,11 @@ read_module_spec <- function(path) {
 }
 
 #' Build Synthea modules from a spec
+#'
+#' **Superseded** by the events pipeline (`read_bridge_concepts()` -> `build_event_spec()` ->
+#' `write_event_spec()` -> `build_modules_from_events()`), which also places covariate records
+#' before exposure, uses every code of a concept, and controls how many events each patient gets.
+#' Kept unchanged for existing exposure+outcome specs.
 #'
 #' Purely mechanical -- no codelist access, no parameter decisions, everything it needs is already
 #' resolved in `x`. Produces several modules, not one:
@@ -357,55 +435,8 @@ build_module_from_spec <- function(x, as_json = TRUE, validate = TRUE) {
     x
   }
 
-  opt_names <- vapply(
-    spec$exposure$options,
-    function(opt) opt$option,
-    character(1)
-  )
-  exposure_options <- .named_list(
-    lapply(spec$exposure$options, function(opt) {
-      code <- create_component_settings(
-        "code",
-        system = opt$system,
-        code = opt$code,
-        display = opt$display
-      )
-      .exposure_leaf(
-        spec$exposure$state_type,
-        paste0("Exposure - ", opt$option),
-        code
-      )
-    }),
-    opt_names
-  )
-  exposure_shares <- .named_list(
-    as.list(vapply(spec$exposure$options, function(opt) opt$share, numeric(1))),
-    opt_names
-  )
-  exposure_shares <- unlist(exposure_shares)
-
-  if (isTRUE(spec$exposure$comparator$include)) {
-    exposure_options <- c(exposure_options, list(comparator = NULL))
-    exposure_shares <- c(
-      exposure_shares,
-      c(comparator = spec$exposure$comparator$share)
-    )
-  }
-
-  .check_shares(exposure_shares, "build_module_from_spec(): exposure shares")
-  exposure_attribute <- spec$exposure$attribute
-  if (!is.character(exposure_attribute) || length(exposure_attribute) != 1 || !nzchar(exposure_attribute)) {
-    stop(
-      "build_module_from_spec(): exposure$attribute must be set -- the outcome modules wait on it"
-    )
-  }
-
-  exposure_fragment <- pathways(
-    "Exposure",
-    options = exposure_options,
-    shares = exposure_shares,
-    attribute = exposure_attribute
-  )
+  exposure_attribute <- .check_exposure_attribute(spec$exposure$attribute, "build_module_from_spec()")
+  exposure_fragment <- .exposure_fragment(spec$exposure, "build_module_from_spec()")
 
   inclusion_fragment <- if (!is.null(spec$inclusion_criteria)) {
     do.call(

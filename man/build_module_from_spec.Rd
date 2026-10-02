@@ -20,10 +20,14 @@ A named list of modules (JSON strings or R lists, per \code{as_json}), keyed by 
 the exposure module first, then one per outcome item.
 }
 \description{
-Purely mechanical -- no codelist access, no parameter decisions, everything it needs is already
-resolved in \code{x}. Produces several modules, not one:
+\strong{Superseded} by the events pipeline (\code{read_bridge_concepts()} -> \code{build_event_spec()} ->
+\code{write_event_spec()} -> \code{build_modules_from_events()}), which also places covariate records
+before exposure, uses every code of a concept, and controls how many events each patient gets.
+Kept unchanged for existing exposure+outcome specs.
 }
 \details{
+Purely mechanical -- no codelist access, no parameter decisions, everything it needs is already
+resolved in \code{x}. Produces several modules, not one:
 \itemize{
 \item \strong{The exposure module} (named \code{spec$name}): an optional \code{create_population()} Guard from
 \code{inclusion_criteria} (entirely omitted -- not a no-op -- when absent), then the exposure

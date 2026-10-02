@@ -12,6 +12,7 @@ What the package does (one paragraph).
 Useful links:
 \itemize{
   \item \url{https://github.com/UMC-Utrecht-RWE/syntheaModuleR}
+  \item \url{https://umc-utrecht-rwe.github.io/syntheaModuleR/}
   \item Report bugs at \url{https://github.com/UMC-Utrecht-RWE/syntheaModuleR/issues}
 }
 

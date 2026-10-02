@@ -246,3 +246,90 @@ test_that("read_bridge_codelist reads a file path with every column as character
   expect_equal(nrow(result), 3)
   expect_type(result$code, "character")
 })
+
+# read_bridge_concepts() ----
+
+full_codelist_fixture <- function() {
+  data.frame(
+    variable_name = c("C_HF_COV", "C_HF_COV", "C_HF_COV", "C_HF_COV", "D_PAIN_AESI", "", "TP_X_COV"),
+    event_abbreviation = c("HF", "HF", "HF", "HF", "PAIN", "ANEURYSM", "X"),
+    type = c("COV", "COV", "COV", "COV", "AESI", "COV", "COV"),
+    coding_system = c("MEDCODEID", "MEDCODEID", "MEDCODEID", "SNOMEDCT_US", "MEDCODEID", "MEDCODEID", "OPCS"),
+    code = c("1", "2", "3", "4", "5", "6", "7"),
+    code_name = c("HF narrow", "HF possible", "HF excluded", "HF snomed", "Pain", "Aneurysm", "Proc"),
+    tags = c("narrow", "possible", "exclude", "narrow", "multiple:narrow+possible", "", "narrow"),
+    stringsAsFactors = FALSE
+  )
+}
+
+test_that("read_bridge_concepts keeps every eligible code per concept, in the asked coding system", {
+  result <- read_bridge_concepts(full_codelist_fixture(), coding_system = "MEDCODEID")
+  expect_equal(sort(result$code[result$concept_id == "C_HF_COV"]), c("1", "2"))
+  expect_false("3" %in% result$code) # exclude-tagged
+  expect_false("4" %in% result$code) # other coding system
+  expect_equal(result$source_type[result$concept_id == "D_PAIN_AESI"], "AESI")
+})
+
+test_that("read_bridge_concepts keeps blank-tagged rows and falls back to <ABBR>_<TYPE> ids", {
+  result <- read_bridge_concepts(full_codelist_fixture(), coding_system = "MEDCODEID")
+  expect_true("ANEURYSM_COV" %in% result$concept_id)
+  expect_equal(result$code[result$concept_id == "ANEURYSM_COV"], "6")
+
+  no_blank <- read_bridge_concepts(
+    full_codelist_fixture(),
+    coding_system = "MEDCODEID",
+    tags_keep = c("narrow", "possible")
+  )
+  expect_false("ANEURYSM_COV" %in% no_blank$concept_id)
+})
+
+test_that("read_bridge_concepts lists concepts with no codes in the system as skipped", {
+  result <- read_bridge_concepts(full_codelist_fixture(), coding_system = "MEDCODEID")
+  expect_equal(attr(result, "skipped"), "TP_X_COV")
+  expect_false("TP_X_COV" %in% result$concept_id)
+})
+
+test_that("read_bridge_concepts de-duplicates a code within a concept, keeping the best tag", {
+  df <- full_codelist_fixture()
+  df <- rbind(df, df[2, ])
+  df$tags[nrow(df)] <- "narrow"
+  result <- read_bridge_concepts(df, coding_system = "MEDCODEID")
+  hf2 <- result[result$concept_id == "C_HF_COV" & result$code == "2", ]
+  expect_equal(nrow(hf2), 1)
+  expect_equal(hf2$tag, "narrow")
+})
+
+test_that("read_bridge_concepts filters by `where`, `concepts` and `exclude_concepts`", {
+  drugs <- data.frame(
+    drug_abbreviation = c("DP_STAT", "DP_CORTISONs", "VP_RSV", "VP_INF"),
+    system = c("DP", "DP", "VP", "VP"),
+    product_identifier = "PRODCODEID",
+    code = c("11", "12", "13", "14"),
+    product_name = c("Statin", "Cortisone", "RSV vaccine", "Flu vaccine"),
+    tags = c("narrow", "", "narrow", "narrow"),
+    stringsAsFactors = FALSE
+  )
+  args <- list(
+    coding_system = "PRODCODEID",
+    concept_col = "drug_abbreviation",
+    source_type_col = "system",
+    fallback_concept = NULL,
+    columns = bridge_columns(coding_system = "product_identifier", display = "product_name")
+  )
+  dp <- do.call(read_bridge_concepts, c(list(drugs, where = list(system = "DP")), args))
+  expect_equal(sort(dp$concept_id), c("DP_CORTISONS", "DP_STAT")) # upper-cased
+  expect_equal(unique(dp$source_type), "DP")
+
+  no_rsv <- do.call(read_bridge_concepts, c(list(drugs, exclude_concepts = "vp_rsv"), args))
+  expect_false("VP_RSV" %in% no_rsv$concept_id)
+
+  only <- do.call(read_bridge_concepts, c(list(drugs, concepts = "VP_INF"), args))
+  expect_equal(only$concept_id, "VP_INF")
+})
+
+test_that("read_bridge_concepts errors clearly on a missing concept column", {
+  expect_error(
+    read_bridge_concepts(full_codelist_fixture(), coding_system = "MEDCODEID", concept_col = "drug_abbreviation"),
+    "concept column 'drug_abbreviation' not found"
+  )
+})

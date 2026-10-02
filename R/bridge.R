@@ -232,6 +232,181 @@ read_bridge_codelist <- function(
   result
 }
 
+#' Read every eligible code of every concept in a RWE-BRIDGE-style codelist
+#'
+#' The "all codes per concept" counterpart of `read_bridge_codelist()`: instead of collapsing each
+#' concept to one best-tagged row, returns one row per (concept, code) for every row whose `tags`
+#' value is eligible, in the requested coding system. This is stage 1 of the events pipeline (see
+#' `build_event_spec()`).
+#'
+#' The concept id is read from `concept_col` (a raw column name -- e.g. `"variable_name"` in the
+#' full events/AESI/COV codelist, `"drug_abbreviation"` in the drug-proxy codelist) and
+#' upper-cased, so it matches the concept ids a CONCEPTION-style pipeline uses. A blank concept id
+#' falls back to the `fallback_concept` columns pasted with `"_"` (e.g. `<ABBR>_<TYPE>`).
+#'
+#' A concept that survives the `where`/`concepts` filters but has no eligible row in
+#' `coding_system` isn't an error -- it's listed in the result's `"skipped"` attribute, because a
+#' codelist routinely carries concepts that are only coded in other systems.
+#'
+#' @param x A file path (read with every column as character), or an already-loaded `data.frame`.
+#' @param coding_system Keep only rows in this coding system (case-insensitive), e.g.
+#'   `"MEDCODEID"` or `"PRODCODEID"`.
+#' @param concept_col Raw column name holding the concept id.
+#' @param fallback_concept Raw column names pasted with `"_"` to build the concept id when
+#'   `concept_col` is blank. `NULL`: a blank concept id is an error.
+#' @param source_type_col Raw column name holding the concept's category, copied into the
+#'   `source_type` output column (e.g. `"type"` for `AESI`/`COV`, `"system"` for the drug-proxy
+#'   codelist's `DP`/`VP`). `NULL`: `source_type` is `NA`.
+#' @param where Optional named list of raw-column equality filters (case-insensitive, trimmed),
+#'   e.g. `list(system = "DP")`.
+#' @param concepts Optional character vector of concept ids to keep (case-insensitive).
+#' @param exclude_concepts Optional character vector of concept ids to drop (case-insensitive).
+#' @param tags_keep Eligible tag values, matched case-insensitively as substrings; `""` means a
+#'   blank `tags` cell is eligible. A row tagged `exclude`/`ignore` anywhere is never eligible.
+#' @param columns A `bridge_columns()` alias map, used for `code`, `display`, `coding_system` and
+#'   `tags`.
+#' @param source Optional label copied into the `source` output column (e.g. the file name).
+#' @return A `data.frame` with columns `concept_id`, `source`, `source_type`, `system`, `code`,
+#'   `display`, `tag` -- one row per distinct (concept, code), the best-tagged row kept when a
+#'   code appears more than once -- with a `"skipped"` attribute (character vector).
+#' @examples
+#' \dontrun{
+#' read_bridge_concepts(
+#'   "20260504_V2_ALL_full_codelist.csv",
+#'   coding_system = "MEDCODEID", concept_col = "variable_name"
+#' )
+#' read_bridge_concepts(
+#'   "20260611_All_drug_proxies_codelist.csv",
+#'   coding_system = "PRODCODEID", concept_col = "drug_abbreviation",
+#'   source_type_col = "system", fallback_concept = NULL,
+#'   columns = bridge_columns(coding_system = "product_identifier", display = "product_name")
+#' )
+#' }
+#' @export
+read_bridge_concepts <- function(
+  x,
+  coding_system,
+  concept_col = "variable_name",
+  fallback_concept = c("event_abbreviation", "type"),
+  source_type_col = "type",
+  where = NULL,
+  concepts = NULL,
+  exclude_concepts = NULL,
+  tags_keep = c("narrow", "possible", ""),
+  columns = bridge_columns(),
+  source = NULL
+) {
+  df <- .read_bridge_source(x)
+  raw_col <- function(nm, what) {
+    if (!nm %in% names(df)) {
+      stop(sprintf(
+        "read_bridge_concepts(): %s column '%s' not found. Available columns: %s.",
+        what,
+        nm,
+        paste(names(df), collapse = ", ")
+      ))
+    }
+    df[[nm]]
+  }
+  norm <- function(v) toupper(trimws(ifelse(is.na(v), "", v)))
+
+  code_col <- .resolve_bridge_column("code", required = TRUE, columns, df)
+  display_col <- .resolve_bridge_column("display", required = TRUE, columns, df)
+  system_col <- .resolve_bridge_column("coding_system", required = TRUE, columns, df)
+  tags_col <- .resolve_bridge_column("tags", required = TRUE, columns, df)
+
+  concept_id <- norm(raw_col(concept_col, "concept"))
+  blank <- !nzchar(concept_id)
+  if (any(blank)) {
+    if (is.null(fallback_concept)) {
+      stop(sprintf(
+        "read_bridge_concepts(): %d row(s) have a blank '%s' and no fallback_concept is set",
+        sum(blank),
+        concept_col
+      ))
+    }
+    parts <- lapply(fallback_concept, function(nm) {
+      norm(raw_col(nm, "fallback_concept"))
+    })
+    concept_id[blank] <- do.call(paste, c(lapply(parts, `[`, blank), sep = "_"))
+  }
+
+  keep <- rep(TRUE, nrow(df))
+  for (nm in names(where)) {
+    keep <- keep & norm(raw_col(nm, "where")) == norm(where[[nm]])
+  }
+  if (!is.null(concepts)) {
+    keep <- keep & concept_id %in% norm(concepts)
+  }
+  if (!is.null(exclude_concepts)) {
+    keep <- keep & !concept_id %in% norm(exclude_concepts)
+  }
+  candidates <- unique(concept_id[keep])
+  if (length(candidates) == 0) {
+    stop(
+      "read_bridge_concepts(): no rows remain after the `where`/`concepts`/`exclude_concepts` filters"
+    )
+  }
+
+  in_system <- norm(df[[system_col]]) == norm(coding_system)
+  # Rank each distinct tag value once -- a full codelist has ~300k rows but only a few tag values.
+  tag_values <- unique(df[[tags_col]])
+  tag_rank <- vapply(tag_values, .keep_tag_rank, integer(1), tags_keep = tags_keep)[
+    match(df[[tags_col]], tag_values)
+  ]
+  eligible <- keep & in_system & !is.na(tag_rank)
+
+  source_type <- if (is.null(source_type_col)) {
+    rep(NA_character_, nrow(df))
+  } else {
+    norm(raw_col(source_type_col, "source_type"))
+  }
+
+  out <- data.frame(
+    concept_id = concept_id[eligible],
+    source = if (is.null(source)) NA_character_ else source,
+    source_type = source_type[eligible],
+    system = df[[system_col]][eligible],
+    code = trimws(df[[code_col]][eligible]),
+    display = df[[display_col]][eligible],
+    tag = trimws(ifelse(is.na(df[[tags_col]][eligible]), "", df[[tags_col]][eligible])),
+    stringsAsFactors = FALSE
+  )
+  rank <- tag_rank[eligible]
+  has_code <- nzchar(out$code)
+  out <- out[has_code, , drop = FALSE]
+  out <- out[order(out$concept_id, rank[has_code]), , drop = FALSE]
+  out <- out[!duplicated(out[c("concept_id", "code")]), , drop = FALSE]
+  rownames(out) <- NULL
+
+  attr(out, "skipped") <- sort(setdiff(candidates, out$concept_id))
+  out
+}
+
+#' Rank a `tags` cell against `tags_keep` for `read_bridge_concepts()`
+#'
+#' Like `.tag_rank()`, but a blank cell is eligible when `""` is in `tags_keep` (ranked where `""`
+#' sits in `tags_keep`), matching how a CONCEPTION-style pipeline keeps untagged rows as
+#' lower-priority matches.
+#' @return The index of the first matching `tags_keep` entry, or `NA_integer_` if ineligible.
+#' @noRd
+.keep_tag_rank <- function(tag_value, tags_keep) {
+  tl <- if (is.na(tag_value)) "" else tolower(trimws(tag_value))
+  if (grepl("exclude|ignore", tl)) {
+    return(NA_integer_)
+  }
+  if (!nzchar(tl)) {
+    hit <- which(tags_keep == "")
+    return(if (length(hit) > 0) hit[1] else NA_integer_)
+  }
+  for (i in seq_along(tags_keep)) {
+    if (nzchar(tags_keep[i]) && grepl(tolower(tags_keep[i]), tl, fixed = TRUE)) {
+      return(i)
+    }
+  }
+  NA_integer_
+}
+
 #' @param x A file path or `data.frame`.
 #' @return `x` itself if already a `data.frame`; otherwise the CSV at `x` read with every column
 #'   as character (so codes like `"014238641000033110"`-shaped values never get numeric-coerced).
@@ -248,7 +423,8 @@ read_bridge_codelist <- function(
       x,
       colClasses = "character",
       stringsAsFactors = FALSE,
-      check.names = FALSE
+      check.names = FALSE,
+      encoding = "UTF-8"
     ))
   }
   stop(

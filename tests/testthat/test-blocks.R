@@ -81,6 +81,18 @@ test_that("create_population validates socioeconomic category", {
   expect_equal(frag$states$X$allow$category, "Low")
 })
 
+test_that("create_population adds a Date filter", {
+  frag <- create_population(
+    "Older Adults From 2023",
+    age = list(operator = ">=", quantity = 60, unit = "years"),
+    date = list(operator = ">=", year = 2023)
+  )
+  conds <- frag$states$`Older Adults From 2023`$allow$conditions
+  expect_length(conds, 2)
+  expect_equal(conds[[2]]$condition_type, "Date")
+  expect_equal(conds[[2]]$year, 2023)
+})
+
 test_that("create_condition builds onset -> encounter -> encounter-end (wellness)", {
   frag <- create_condition("Diabetes", another_code(), diagnosis = "wellness")
   expect_fragment(frag, entry = "Diabetes", exit = "Diabetes Encounter End")

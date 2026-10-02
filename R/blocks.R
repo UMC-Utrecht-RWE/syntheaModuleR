@@ -120,6 +120,9 @@ create_guard <- function(condition, label = "Guard") {
 #' @param socioeconomic Optional, one of `"High"`/`"Middle"`/`"Low"` (the `Logic` engine's own
 #'   documented closed set for `SocioeconomicStatus`); validated when given, left `NULL` (no
 #'   filter) by default.
+#' @param date Optional `list(operator, year = , month = , date = )` -- a calendar-time filter,
+#'   passed straight to `create_logic_settings("Date", ...)` (exactly one of `year`/`month`/`date`;
+#'   `date` is a full `list(year, month, day, hour, minute, second, millisecond)`).
 #' @return A fragment, or `NULL` if every filter is omitted.
 #' @examples
 #' create_population("Adult Filter", age = list(operator = ">=", quantity = 18, unit = "years"))
@@ -129,7 +132,8 @@ create_population <- function(
   age = NULL,
   gender = NULL,
   race = NULL,
-  socioeconomic = NULL
+  socioeconomic = NULL,
+  date = NULL
 ) {
   conditions <- list()
   if (!is.null(age)) {
@@ -162,6 +166,19 @@ create_population <- function(
       list(create_logic_settings(
         "SocioeconomicStatus",
         category = socioeconomic
+      ))
+    )
+  }
+
+  if (!is.null(date)) {
+    conditions <- c(
+      conditions,
+      list(create_logic_settings(
+        "Date",
+        operator = date$operator,
+        year = date$year,
+        month = date$month,
+        date = date$date
       ))
     )
   }

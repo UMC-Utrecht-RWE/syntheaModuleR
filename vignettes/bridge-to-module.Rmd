@@ -1,8 +1,8 @@
 ---
-title: "From a RWE-BRIDGE codelist to a Synthea module"
+title: "From a RWE-BRIDGE codelist to Synthea modules"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{From a RWE-BRIDGE codelist to a Synthea module}
+  %\VignetteIndexEntry{From a RWE-BRIDGE codelist to Synthea modules}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -15,158 +15,253 @@ knitr::opts_chunk$set(
 ```
 
 This vignette assumes you've read `vignette("layers")` and `vignette("cohort-building")`. Those
-cover authoring a module's *content* directly in R. This one covers a different starting point:
-you already have a **RWE-BRIDGE-style reference codelist** -- a CSV mapping concepts to real
-codes, of the `event_definition / coding_system / code / concept_name / tags / type /
-event_abbreviation` shape used across several UMC-Utrecht-RWE study repositories -- and want a
-Synthea module that emits raw exposure/outcome records using those real codes.
-
-## The four stages
+cover authoring a module's *content* directly in R. This one starts somewhere else. You already
+have one or more **RWE-BRIDGE-style reference codelists**: CSVs mapping study concepts (outcomes,
+covariates, drug classes, ...) to real codes, in the `event_definition / coding_system / code /
+concept_name / tags / type / event_abbreviation` shape used across several UMC-Utrecht-RWE study
+repositories. You want synthetic patients whose records use those real codes: an exposure, prior
+history before it, and outcomes after it, so a study pipeline that runs on the codelists has
+something to find for every concept.
 
 ```{r setup}
 library(syntheaModuleR)
 ```
 
-1. **Specify where the necessary information is** -- `read_bridge_codelist()` reads a codelist
-   file (or an already-loaded `data.frame`) and returns a clean, canonically-named code table.
-2. **Add inclusion criteria / exposure / outcome parameters** -- `build_module_spec()` combines
-   those resolved codes with the parameters a codelist alone can never supply (arm shares, onset
-   probability/timing, optional demographic eligibility).
-3. **Produce a YAML that is editable** -- `write_module_spec()` persists the result; every code,
-   share, and probability is right there in plain text, ready to hand-edit.
-4. **Go from YAML to build the modules** -- `build_module_from_spec()` reads it back and
-   mechanically assembles the Synthea modules: one exposure module, plus one module per outcome.
-   This step never touches a codelist again.
+## The four stages
 
-## Stage 1: read the codelist
+1. **Read every concept and code**: `read_bridge_concepts()` returns one row per (concept, code)
+   for every eligible row of a codelist.
+2. **Add the study parameters**: `build_event_spec()` assigns each concept to a *block* and a
+   *pattern* and adds the parameters a codelist can't supply: exposure arms, the timeline, and
+   how many events a patient gets.
+3. **Write an editable spec**: `write_event_spec()` writes a YAML (structure and parameters) plus
+   two CSVs (concepts, codes). These are the files you review, commit and hand-edit.
+   `read_event_spec()` reads them back and checks them.
+4. **Build the modules**: `build_modules_from_events()` mechanically turns the spec into a few
+   Synthea modules, and `write_modules()` writes them where Synthea can run them.
 
-A toy codelist, standing in for a real RWE-BRIDGE file (the concept `GRIPPE` deliberately has one
-`exclude`-tagged and one `narrow`-tagged row, to show the tag-preference filtering):
+Nothing is read from a study's pipeline-computed logic (e.g. `study_variables.csv`); every
+parameter is supplied by the caller.
 
-```{r toy-codelist}
-codelist <- data.frame(
-  event_abbreviation = c("GRIPPE", "GRIPPE", "COUGH"),
-  coding_system = "SNOMED-CT",
-  code = c("1", "2", "3"),
-  code_name = c("An unrelated excluded concept", "Influenza (disorder)", "Cough (finding)"),
-  tags = c("exclude", "narrow", "narrow"),
-  type = "AESI",
+## Stage 1: read every concept and code
+
+Two toy codelists stand in for the real files. The first has the full-codelist shape (concept id
+in `variable_name`, category in `type`); the second has the drug-proxy shape (concept id in
+`drug_abbreviation`, category in `system`, product columns instead of `coding_system`/`code_name`):
+
+```{r toy-codelists}
+full <- data.frame(
+  variable_name = c("N_GBS_AESI", "N_GBS_AESI", "N_GBS_AESI", "C_HF_COV", "C_HF_COV"),
+  event_abbreviation = c("GBS", "GBS", "GBS", "HF", "HF"),
+  type = c("AESI", "AESI", "AESI", "COV", "COV"),
+  coding_system = "SNOMEDCT_US",
+  code = c("40956001", "1", "2", "84114007", "42343007"),
+  code_name = c(
+    "Guillain-Barré syndrome", "Unrelated", "Miller Fisher syndrome",
+    "Heart failure", "Congestive heart failure"
+  ),
+  tags = c("narrow", "exclude", "possible", "narrow", ""),
   stringsAsFactors = FALSE
 )
 
-outcome_codes <- read_bridge_codelist(
-  codelist,
-  type = "AESI", coding_system = "SNOMED-CT",
-  group_by = "event_abbreviation"
+drugs <- data.frame(
+  drug_abbreviation = c("DP_STAT", "DP_STAT", "DP_ANTIBIO", "VP_FLU", "VP_FLU"),
+  system = c("DP", "DP", "DP", "VP", "VP"),
+  product_identifier = "RxNorm",
+  code = c("617312", "617311", "308182", "brand_a", "brand_b"),
+  product_name = c(
+    "Atorvastatin 40 MG", "Atorvastatin 20 MG", "Amoxicillin 250 MG",
+    "Brand A flu vaccine", "Brand B flu vaccine"
+  ),
+  tags = "narrow",
+  stringsAsFactors = FALSE
 )
-outcome_codes
 ```
 
-The `exclude`-tagged row for `GRIPPE` was never a candidate -- `read_bridge_codelist()` picked the
-`narrow` one. A real RWE-BRIDGE codelist often has dozens of candidate rows per concept; this is
-what makes picking the right one by hand tedious enough to be worth automating (and, done
-carelessly, easy to get wrong -- an earlier, unfiltered extraction genuinely picked an
-`exclude`-tagged row for a real AESI).
+```{r read}
+full_codes <- read_bridge_concepts(full, coding_system = "SNOMEDCT_US")
+full_codes
 
-An exposure-style extraction looks different: a handful of already-distinct rows (e.g. specific
-vaccine products), filtered by `event_abbreviation` alone, with no tag ranking needed
-(`group_by = NULL`, the default):
-
-```{r toy-exposure}
-drug_codelist <- data.frame(
-  event_abbreviation = c("FLU_VACC", "FLU_VACC"),
-  product_identifier = "PRODCODEID",
-  code = c("101", "102"),
-  product_name = c("Brand A flu vaccine", "Brand B flu vaccine"),
-  stringsAsFactors = FALSE
-)
-
-flu_rows <- read_bridge_codelist(
-  drug_codelist,
-  event_abbreviation = "FLU_VACC", coding_system = "PRODCODEID",
+drug_codes <- read_bridge_concepts(
+  drugs,
+  coding_system = "RxNorm",
+  concept_col = "drug_abbreviation", source_type_col = "system",
+  fallback_concept = NULL, exclude_concepts = "VP_FLU",
   columns = bridge_columns(coding_system = "product_identifier", display = "product_name")
 )
-flu_rows
+drug_codes
 ```
 
-```{r toy-exposure-codes}
+A few things happened along the way:
+
+- The `exclude`-tagged GBS row was dropped. `possible`-tagged and blank-tagged rows were kept,
+  because by default a row is eligible unless it's tagged `exclude`/`ignore`.
+- Every eligible code was kept, not just one per concept. A patient who gets a concept gets one
+  of its codes at random, so across a population every code can show up.
+- `VP_FLU` was excluded because it's going to be the exposure (below). A concept with no code in
+  the requested coding system would be listed in `attr(x, "skipped")` instead of causing an
+  error.
+
+The exposure products are picked out individually, as before:
+
+```{r exposure-codes}
+flu <- read_bridge_codelist(
+  drugs,
+  event_abbreviation = "VP_FLU", coding_system = "RxNorm",
+  columns = bridge_columns(
+    event_abbreviation = "drug_abbreviation",
+    coding_system = "product_identifier", display = "product_name"
+  )
+)
 exposure_codes <- data.frame(
   option = c("brand_a", "brand_b"),
-  system = "PRODCODEID",
-  code = flu_rows$code,
-  display = flu_rows$display,
+  system = "RxNorm",
+  code = flu$code,
+  display = flu$display,
   stringsAsFactors = FALSE
 )
 ```
 
-## Stage 2: add the parameters a codelist can't supply
+## Stage 2: add the study parameters
 
 ```{r spec}
-spec <- build_module_spec(
+x <- build_event_spec(
   "flu_vaccine_example",
+  codes = rbind(full_codes, drug_codes),
   exposure_codes = exposure_codes,
   exposure_shares = c(brand_a = 0.3, brand_b = 0.2, comparator = 0.5),
-  outcome_codes = outcome_codes,
-  outcome_probability = 0.05,
-  outcome_delay = list(low = 0, high = 365, unit = "days"),
-  inclusion_criteria = list(age = list(operator = ">=", quantity = 18, unit = "years"))
+  exposure_delay = list(low = 365, high = 545, unit = "days"),
+  cohort_criteria = list(age = list(operator = ">=", quantity = 60, unit = "years")),
+  recurring_drugs = "DP_STAT"
 )
+x$concepts
 ```
 
-Note what's *not* here: no eligibility window, no composite subgroup logic, no incidence rate
-sourced from any pipeline-computed file. `inclusion_criteria` is the one optional exception --
-plain demographic skew, off by default, and never derived automatically.
+### The timeline
 
-## Stage 3: write (and read back) the YAML
+```
+cohort entry ──[ baseline window: history ]──────┬── exposure (365–545 days later)
+       │                                         │
+       └──[ chronic: repeat prescriptions ......................... ]
+                                                 └──[ follow-up window: outcomes ]
+```
+
+- **Cohort entry.** The exposure module waits for `cohort_criteria` (age >= 60 here), sets the
+  `cohort_entry` attribute, waits `exposure_delay`, then assigns the arm. The random delay
+  spreads exposure dates instead of everyone being exposed the moment they qualify.
+- **Before exposure.** The `baseline` and `chronic` blocks start at cohort entry. They are
+  checked so that baseline records always land before the earliest possible exposure, and
+  recurring therapy always runs past the latest possible exposure (so both short and long
+  look-backs from exposure find prescriptions, in every arm).
+- **After exposure.** The `follow_up` block starts when the exposure attribute is set.
+
+### Blocks: how many events a patient gets
+
+Each block becomes **one** module that draws `k` events per patient. Each draw picks a concept
+(by `weight`), then one of that concept's codes (by `weight`):
+
+```{r blocks}
+str(x$spec$blocks$baseline)
+```
+
+With these defaults, 40 % of patients have no baseline history, and the rest have 1 to 5 events.
+There are a few modules per study, not one per concept. Synthea re-checks every module for every
+person at every timestep, so hundreds of per-concept modules would mostly sit idle in a Guard
+for decades of simulated time.
+
+### Patterns: what one event looks like
+
+```{r patterns}
+str(x$spec$patterns)
+```
+
+- `chronic` conditions are never ended; `acute` conditions are ended after `resolves_after`.
+- `course` drugs are a single prescription ended after `course`.
+- `recurring` drugs repeat `course` + `gap` for `cycles` prescriptions.
+- `once` (vaccines) has no parameters.
+
+Ending a record matters: Synthea doesn't create a new record for a code that's still active.
+
+`build_event_spec()` assigns the defaults per codelist category: AESIs both as history
+(`baseline`) and as outcomes (`follow_up`), COV concepts as chronic baseline conditions, drugs as
+courses (or `recurring`, in the `chronic` block, if listed in `recurring_drugs`), and vaccines as
+`once`. See `default_event_roles()`.
+
+### What a patient will get
+
+`summarise_events()` gives the review summary:
+
+```{r summary}
+s <- summarise_events(x)
+s$blocks
+s$concepts
+```
+
+It also reports `s$overlap`: concepts that share codes. A shared code is recorded once but counts
+toward every concept that lists it, so overlapping concepts end up more frequent than their
+weight alone suggests.
+
+## Stage 3: write (and read back) the spec
+
+```{r write-spec}
+dir <- tempfile("spec")
+path <- write_event_spec(x, dir)
+list.files(dir)
+```
 
 ```{r yaml, comment = ""}
-path <- tempfile(fileext = ".yaml")
-write_module_spec(spec, path)
-cat(readLines(path), sep = "\n")
+cat(readLines(path, encoding = "UTF-8"), sep = "\n")
 ```
 
-This file is the thing you'd commit and hand-edit -- fix a code, add or remove an outcome item,
-adjust a share, all without touching R again.
+The YAML holds the structure. The two CSVs hold everything per concept and per code. In
+`concepts.csv` you can:
 
-## Stage 4: build the modules
+- change a concept's `weight` (blank means 1);
+- set `enabled` to `FALSE` to leave a concept out;
+- move a concept to another `block` or `pattern`;
+- write the reasoning in `note`.
+
+`read_event_spec()` rejects unknown keys or columns (a typo can't be silently ignored), patterns a
+state type can't have, `k` shares that don't sum to 1, and timelines that break the
+before/after-exposure guarantees.
+
+## Stage 4: build and write the modules
 
 ```{r build}
-modules <- build_module_from_spec(path)
+modules <- build_modules_from_events(path)
 names(modules)
 ```
 
-The result is a named list: the exposure module first, then one module per outcome item.
+The `chronic` block has `parallel = 2`. Draws inside one module happen one after another, so a
+second long-term therapy in the same module would only start after the first one ended. Two
+independent copies let a patient be on up to two therapies at once.
 
-```{r build-exposure}
-exposure <- jsonlite::fromJSON(modules[["flu_vaccine_example"]], simplifyVector = FALSE)
-exposure$states$Initial$direct_transition
+The block modules are built directly on the Engine layer: a K-draw loop whose leaves are one state
+per code, all converging on a few shared tail states.
+
+```{r loop}
+baseline <- jsonlite::fromJSON(modules[["flu_vaccine_example - baseline"]], simplifyVector = FALSE)
+names(baseline$states)
 ```
 
-`inclusion_criteria` was given, so the exposure module's `Initial` routes into a
-`create_population()` Guard first; omit it entirely (`inclusion_criteria = NULL`, the default) and
-`Initial` would route straight into the exposure block instead -- `chain()` drops a `NULL` fragment
-on its own, no special-casing needed. The exposure block tags the chosen arm on the person as the
-spec's `exposure$attribute` (`"exposure_group"` by default).
+Conditions are recorded with no target encounter, so Synthea records them at the exact simulated
+time instead of waiting for the next wellness visit.
 
-Each outcome module starts with a Guard that waits for that attribute to be set, then runs its own
-delay and onset choice:
-
-```{r build-outcome}
-outcome <- jsonlite::fromJSON(modules[[2]], simplifyVector = FALSE)
-names(outcome$states)
-```
-
-Why separate modules rather than chaining every outcome after the exposure in one module? A person
-is only ever in one state of a given module at a time, so chained outcomes would run one after
-another: the second outcome's delay would only start once the first one's had finished, making the
-windows cumulative and dependent on codelist row order. Synthea runs every module for a person side
-by side, so separate modules give each outcome its own window measured from exposure.
-
-All the modules belong together -- write them out and install them in the same Synthea checkout:
+`write_modules()` writes the files into one flat folder and returns the matching Synthea
+arguments. Synthea treats JSON files in a *subfolder* of a module directory as submodules, which
+never run on their own.
 
 ```{r write, eval = FALSE}
-for (nm in names(modules)) {
-  write_module_json(modules[[nm]], file.path("modules", paste0(nm, ".json")))
-}
+out <- write_modules(modules, "modules/flu_vaccine_example")
+out$synthea_args
+#> [1] "-d" "modules/flu_vaccine_example" "-m" "flu_vaccine_example*"
 ```
 
+For quick runs, `build_modules_from_events(path, max_codes_per_concept = 5)` keeps a reproducible
+sample of at most 5 codes per concept.
+
+## The original exposure + outcomes spec
+
+`build_module_spec()` / `build_module_from_spec()` (one best code per outcome, one module per
+outcome, no records before exposure) are kept unchanged for existing specs, but the events
+pipeline above supersedes them.

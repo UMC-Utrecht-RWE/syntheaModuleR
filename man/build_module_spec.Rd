@@ -37,7 +37,7 @@ a numeric column in \code{outcome_codes} to use per row instead.}
 placement window. A specific item's delay can still be hand-overridden after writing the
 YAML -- see the \verb{outcomes.items[[i]].delay} shape \code{build_module_from_spec()} reads.}
 
-\item{inclusion_criteria}{Optional \code{list(age = list(operator, quantity, unit), gender = ..., race = ..., socioeconomic = ...)}, passed straight through to \code{create_population()}'s
+\item{inclusion_criteria}{Optional \code{list(age = list(operator, quantity, unit), gender = ..., race = ..., socioeconomic = ..., date = ...)}, passed straight through to \code{create_population()}'s
 matching arguments. \code{NULL} (default): no Guard at all -- omitted from the module entirely,
 not merely a no-op filter.}
 
@@ -58,6 +58,12 @@ A nested list (the spec). Pass to \code{write_module_spec()} to persist it, or s
 \code{build_module_from_spec()}.
 }
 \description{
+\strong{Superseded} by the events pipeline (\code{read_bridge_concepts()} -> \code{build_event_spec()} ->
+\code{write_event_spec()} -> \code{build_modules_from_events()}), which also places covariate records
+before exposure, uses every code of a concept, and controls how many events each patient gets.
+Kept unchanged for existing exposure+outcome specs.
+}
+\details{
 Combines already-resolved exposure/outcome code tables (typically \code{read_bridge_codelist()}'s
 output, though any \code{data.frame} with the right columns works) with the human-decided
 parameters a codelist alone can never supply -- arm shares, onset probability/timing, optional

@@ -9,7 +9,8 @@ create_population(
   age = NULL,
   gender = NULL,
   race = NULL,
-  socioeconomic = NULL
+  socioeconomic = NULL,
+  date = NULL
 )
 }
 \arguments{
@@ -25,6 +26,10 @@ create_population(
 \item{socioeconomic}{Optional, one of \code{"High"}/\code{"Middle"}/\code{"Low"} (the \code{Logic} engine's own
 documented closed set for \code{SocioeconomicStatus}); validated when given, left \code{NULL} (no
 filter) by default.}
+
+\item{date}{Optional \code{list(operator, year = , month = , date = )} -- a calendar-time filter,
+passed straight to \code{create_logic_settings("Date", ...)} (exactly one of \code{year}/\code{month}/\code{date};
+\code{date} is a full \code{list(year, month, day, hour, minute, second, millisecond)}).}
 }
 \value{
 A fragment, or \code{NULL} if every filter is omitted.

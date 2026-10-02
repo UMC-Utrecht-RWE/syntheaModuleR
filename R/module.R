@@ -59,7 +59,15 @@ build_module <- function(
   }
 
   if (isTRUE(as_json)) {
-    jsonlite::toJSON(module, auto_unbox = TRUE, pretty = pretty, null = "null")
+    # digits = NA: full precision. jsonlite's default (4 decimals) would round a small transition
+    # probability like 1/6042 to 0.0002, silently skewing a distributed_transition.
+    jsonlite::toJSON(
+      module,
+      auto_unbox = TRUE,
+      pretty = pretty,
+      null = "null",
+      digits = NA
+    )
   } else {
     module
   }
@@ -150,9 +158,10 @@ validate_module <- function(module_list) {
     }
   }
 
-  referenced <- character(0)
-  for (nm in state_names) {
-    st <- states[[nm]]
+  # Collected per state and combined once: growing one vector with c() inside the loop is
+  # quadratic, which dominates validation time for modules with tens of thousands of states.
+  referenced <- lapply(states, function(st) {
+    referenced <- character(0)
     if (!is.null(st$direct_transition)) {
       referenced <- c(referenced, st$direct_transition)
     }
@@ -222,7 +231,10 @@ validate_module <- function(module_list) {
       referenced <- c(referenced, st$allergy_onset)
     }
     if (!is.null(st$device)) referenced <- c(referenced, st$device)
-  }
+    referenced
+  })
+  referenced <- unlist(referenced, use.names = FALSE)
+
   missing <- setdiff(unique(referenced), state_names)
   if (length(missing) > 0) {
     stop(sprintf(
@@ -259,13 +271,16 @@ write_module_json <- function(x, path) {
       x,
       auto_unbox = TRUE,
       pretty = TRUE,
-      null = "null"
+      null = "null",
+      digits = NA
     ))
   } else {
     stop("write_module_json(): `x` must be a JSON string or a module list")
   }
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
-  writeLines(json_text, con = path)
+  # Write the UTF-8 bytes as-is: without useBytes, writeLines() translates to the session's native
+  # encoding, which under a C locale turns e.g. "é" into the literal text "<U+00E9>".
+  writeLines(enc2utf8(json_text), con = path, useBytes = TRUE)
   invisible(path)
 }
 
